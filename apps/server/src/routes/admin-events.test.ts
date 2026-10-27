@@ -202,8 +202,32 @@ describe("Events verwalten", () => {
     expect(res.json().presenterUrl).not.toBe(event.presenterUrl);
   });
 
-  it("löscht ein Event", async () => {
+  it("öffnet ein Event für den Beitritt und schließt es wieder", async () => {
     const { event, app, cookie } = await setup();
+    const setStatus = (status: string) =>
+      app.inject({
+        method: "PUT",
+        url: `/api/admin/events/${event.id}/status`,
+        headers: { cookie },
+        payload: { status },
+      });
+
+    expect(event.status).toBe("draft");
+    expect((await setStatus("open")).json()).toMatchObject({ status: "open" });
+    expect((await setStatus("draft")).json()).toMatchObject({ status: "draft" });
+    expect((await setStatus("running")).statusCode).toBe(400);
+
+    await setStatus("open");
+    await t.db.insert(participant).values({ eventId: event.id, sessionTokenHash: "x" });
+    const back = await setStatus("draft");
+    expect(back.statusCode).toBe(409);
+    expect(back.json().error).toBe("has_participants");
+  });
+
+  it("löscht ein Event samt Selfies", async () => {
+    const { event, app, cookie } = await setup();
+    await t.storage.put(`events/${event.id}/selfies/p1/a.jpg`, Buffer.from("x"), "image/jpeg");
+    await t.storage.put("events/anderes/selfies/p2/b.jpg", Buffer.from("x"), "image/jpeg");
     const res = await app.inject({
       method: "DELETE",
       url: `/api/admin/events/${event.id}`,
@@ -216,5 +240,6 @@ describe("Events verwalten", () => {
       headers: { cookie },
     });
     expect(gone.statusCode).toBe(404);
+    expect(t.storage.keys()).toEqual(["events/anderes/selfies/p2/b.jpg"]);
   });
 });

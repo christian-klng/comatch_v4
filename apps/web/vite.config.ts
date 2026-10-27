@@ -9,7 +9,7 @@ export default defineConfig({
   server: {
     // Erreichbar im lokalen Netz, damit sich echte Handys zum Testen verbinden können.
     host: true,
-    port: 5173,
+    port: Number(process.env.WEB_PORT ?? 5173),
     strictPort: true,
     proxy: {
       "/api": API_TARGET,

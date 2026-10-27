@@ -14,6 +14,8 @@ describe("GET /api/health", () => {
   it("meldet 503, wenn die Datenbank fehlt", async () => {
     const app = await buildApp({
       db: t.db,
+      storage: t.storage,
+      media: t.media,
       publicBaseUrl: "http://x",
       cookieSecure: false,
       pingDb: async () => {

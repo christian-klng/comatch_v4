@@ -118,6 +118,8 @@ export async function getEventDetail(db: Db, eventId: string, publicBaseUrl: str
 
 /** Ersetzt alle Fragen eines Events. Nur erlaubt, solange niemand beigetreten ist. */
 export async function replaceQuestions(tx: Tx, eventId: string, questions: QuestionInput[]): Promise<void> {
+  // Sperrt das Event, damit niemand gleichzeitig mit den alten Antworten beitritt (siehe joinEvent).
+  await tx.select({ id: event.id }).from(event).where(eq(event.id, eventId)).for("update");
   if ((await participantCount(tx, eventId)) > 0) {
     throw new HttpError(
       409,

@@ -17,10 +17,16 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE";
   /** Wird als JSON gesendet, außer es ist ein Blob (dann roh mit dessen Content-Type). */
   body?: unknown;
+  /** Sitzungstoken von Teilnehmenden (Admins nutzen das Cookie). */
+  token?: string;
 }
 
-export async function api<T = void>(path: string, { method = "GET", body }: RequestOptions = {}): Promise<T> {
+export async function api<T = void>(
+  path: string,
+  { method = "GET", body, token }: RequestOptions = {},
+): Promise<T> {
   const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
   let payload: BodyInit | undefined;
   if (body instanceof Blob) {
     headers["Content-Type"] = body.type;

@@ -1,9 +1,14 @@
 import { sql as rawSql } from "drizzle-orm";
 import { afterAll, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
+import { DEFAULT_QUESTIONS, type EventStatus } from "@comatch/shared";
 import { buildApp } from "../src/app.ts";
 import { createDb } from "../src/db/client.ts";
-import { adminUser } from "../src/db/schema.ts";
+import { adminUser, event } from "../src/db/schema.ts";
+import { createEvent } from "../src/events/service.ts";
+import { createMediaSigner } from "../src/lib/media.ts";
 import { hashPassword } from "../src/lib/password.ts";
+import { createMemoryStorage } from "../src/storage/storage.ts";
 import { TEST_DATABASE_URL } from "./db-url.ts";
 
 export const PUBLIC_BASE_URL = "http://comatch.test";
@@ -14,7 +19,9 @@ export const PUBLIC_BASE_URL = "http://comatch.test";
  */
 export function useTestApp() {
   const { db, sql } = createDb(TEST_DATABASE_URL);
-  const appPromise = buildApp({ db, publicBaseUrl: PUBLIC_BASE_URL, cookieSecure: false });
+  const storage = createMemoryStorage();
+  const media = createMediaSigner("test-secret-test-secret-test-secret");
+  const appPromise = buildApp({ db, storage, media, publicBaseUrl: PUBLIC_BASE_URL, cookieSecure: false });
 
   beforeEach(async () => {
     const tables = await db.execute<{ tablename: string }>(
@@ -31,7 +38,21 @@ export function useTestApp() {
 
   const ctx = {
     db,
+    storage,
+    media,
     app: () => appPromise,
+
+    /** Legt ein Event mit den Standardfragen an (Status standardmäßig „offen“). */
+    async createEvent(status: EventStatus = "open", slug = "testev") {
+      const id = await createEvent(
+        db,
+        { title: "Test-Event", startsAt: null, slug },
+        null,
+        DEFAULT_QUESTIONS,
+      );
+      await db.update(event).set({ status }).where(eq(event.id, id));
+      return { id, slug };
+    },
 
     async createAdmin(email = "admin@test.local", password = "richtig-langes-passwort") {
       const [admin] = await db

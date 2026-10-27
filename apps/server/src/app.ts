@@ -13,6 +13,8 @@ import { adminTeamRoutes } from "./routes/admin-team.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { inviteRoutes } from "./routes/invites.ts";
+import { mediaRoutes } from "./routes/media.ts";
+import { participantRoutes } from "./routes/participant.ts";
 import { publicEventRoutes } from "./routes/public-events.ts";
 
 export interface AppOptions extends AppContext {
@@ -28,6 +30,7 @@ export async function buildApp(options: AppOptions) {
   const app = Fastify({ logger: logger ?? false, trustProxy: true });
 
   app.decorateRequest("admin", null);
+  app.decorateRequest("participant", null);
   app.setErrorHandler(errorHandler);
   await app.register(fastifyCookie);
   await app.register(fastifyRateLimit, { global: false });
@@ -44,6 +47,8 @@ export async function buildApp(options: AppOptions) {
       await api.register(authRoutes, context);
       await api.register(inviteRoutes, context);
       await api.register(publicEventRoutes, context);
+      await api.register(mediaRoutes, context);
+      await api.register(participantRoutes, { ...context, prefix: "/participant" });
 
       await api.register(
         async (admin) => {

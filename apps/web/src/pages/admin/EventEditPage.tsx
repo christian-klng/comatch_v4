@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   LOGO_MAX_BYTES,
-  LOGO_MIME_TYPES,
+  IMAGE_MIME_TYPES,
   MAX_ROUND_DURATION_S,
   MIN_ROUND_DURATION_S,
   questionsInput,
@@ -342,7 +342,7 @@ function BrandingTab({ event, onSaved }: TabProps) {
   const uploadLogo = async (file: File | undefined) => {
     if (!file) return;
     setLogoError(null);
-    if (!(LOGO_MIME_TYPES as readonly string[]).includes(file.type)) {
+    if (!(IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
       setLogoError("Bitte ein PNG-, JPEG- oder WebP-Bild wählen.");
       return;
     }
@@ -392,7 +392,7 @@ function BrandingTab({ event, onSaved }: TabProps) {
               <input
                 ref={fileInput}
                 type="file"
-                accept={LOGO_MIME_TYPES.join(",")}
+                accept={IMAGE_MIME_TYPES.join(",")}
                 className="hidden"
                 onChange={(e) => void uploadLogo(e.target.files?.[0])}
               />
@@ -561,6 +561,52 @@ const TABS = [
   { id: "links", label: "QR-Code & Links", Component: LinksTab },
 ] as const;
 
+/** Entwurf ↔ Offen. Start, Pause und Ende kommen mit der Live-Steuerung. */
+function JoinToggle({ event, onSaved }: TabProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (event.status !== "draft" && event.status !== "open") return null;
+
+  const opening = event.status === "draft";
+  const toggle = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(
+        await api<EventDetail>(`/admin/events/${event.id}/status`, {
+          method: "PUT",
+          body: { status: opening ? "open" : "draft" },
+        }),
+      );
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 sm:ml-auto">
+      {error && <span className="text-sm text-rose-600">{error}</span>}
+      {opening ? (
+        <Button busy={busy} onClick={() => void toggle()}>
+          Beitritt öffnen
+        </Button>
+      ) : (
+        <Button
+          variant="secondary"
+          busy={busy}
+          disabled={event.participantCount > 0}
+          title={event.participantCount > 0 ? "Es sind schon Personen beigetreten." : undefined}
+          onClick={() => void toggle()}
+        >
+          Zurück zum Entwurf
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function EventEditPage() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
@@ -588,6 +634,7 @@ export function EventEditPage() {
         <span className="text-sm text-slate-500">
           {event.participantCount} Teilnehmende · Code <span className="font-mono">{event.slug}</span>
         </span>
+        <JoinToggle event={event} onSaved={setEvent} />
       </div>
 
       <div role="tablist" className="mb-6 flex gap-1 overflow-x-auto border-b border-slate-200">

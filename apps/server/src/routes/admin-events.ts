@@ -4,25 +4,30 @@ import { z } from "zod";
 import {
   DEFAULT_QUESTIONS,
   LOGO_MAX_BYTES,
-  LOGO_MIME_TYPES,
+  IMAGE_MIME_TYPES,
   eventCreateInput,
   eventGeneralInput,
   questionsInput,
 } from "@comatch/shared";
 import type { AppContext } from "../context.ts";
-import { event } from "../db/schema.ts";
+import { event, participant } from "../db/schema.ts";
 import { createEvent, getEventDetail, listEvents, replaceQuestions } from "../events/service.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
 import { detectImageType } from "../lib/images.ts";
 import { randomToken } from "../lib/tokens.ts";
 
 const idParams = z.object({ id: z.uuid() });
+/** Vorerst nur Entwurf ↔ Offen; Start, Pause und Ende kommen mit der Live-Steuerung. */
+const statusInput = z.object({ status: z.enum(["draft", "open"]) });
 
 /** Event-Verwaltung. Läuft im geschützten /admin-Bereich. */
-export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (app, { db, publicBaseUrl }) => {
+export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
+  app,
+  { db, storage, publicBaseUrl },
+) => {
   // Logos kommen als rohe Bilddaten (kein Multipart), begrenzt auf LOGO_MAX_BYTES.
   app.addContentTypeParser(
-    [...LOGO_MIME_TYPES],
+    [...IMAGE_MIME_TYPES],
     { parseAs: "buffer", bodyLimit: LOGO_MAX_BYTES },
     (_request, body, done) => done(null, body),
   );
@@ -70,6 +75,25 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (app, { db
     const questions = questionsInput.parse(request.body);
     await requireEvent(id);
     await db.transaction((tx) => replaceQuestions(tx, id, questions));
+    return detail(id);
+  });
+
+  app.put("/events/:id/status", async (request) => {
+    const { id } = idParams.parse(request.params);
+    const { status } = statusInput.parse(request.body);
+    const row = await requireEvent(id);
+    if (row.status === status) return detail(id);
+    if (row.status !== "draft" && row.status !== "open") {
+      throw new HttpError(409, "status_change_unsupported", "Dieser Statuswechsel ist noch nicht möglich.");
+    }
+    if (status === "draft" && (await db.$count(participant, eq(participant.eventId, id))) > 0) {
+      throw new HttpError(
+        409,
+        "has_participants",
+        "Es sind schon Personen beigetreten. Das Event kann nicht zurück in den Entwurf.",
+      );
+    }
+    await db.update(event).set({ status }).where(eq(event.id, id));
     return detail(id);
   });
 
@@ -121,6 +145,7 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (app, { db
       );
     }
     await db.delete(event).where(eq(event.id, id));
+    await storage.deletePrefix(`events/${id}/`);
     return reply.code(204).send();
   });
 };

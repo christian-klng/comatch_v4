@@ -13,8 +13,9 @@ export const MAX_ROUND_DURATION_S = 15 * 60;
 export const QUESTION_WEIGHTS = [0.5, 1, 1.5, 2, 3] as const;
 
 export const LOGO_MAX_BYTES = 512 * 1024;
-export const LOGO_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
-export type LogoMimeType = (typeof LOGO_MIME_TYPES)[number];
+/** Erlaubte Bildformate für Logos und Selfies. */
+export const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export type ImageMimeType = (typeof IMAGE_MIME_TYPES)[number];
 
 export const answerOptionInput = z.object({
   label: z.string().trim().min(1, "Bitte eine Antwort eingeben.").max(60),

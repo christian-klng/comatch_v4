@@ -1,7 +1,7 @@
-import type { LogoMimeType } from "@comatch/shared";
+import type { ImageMimeType } from "@comatch/shared";
 
 /** Erkennt PNG, JPEG und WebP an den ersten Bytes (Content-Type allein ist nicht vertrauenswürdig). */
-export function detectImageType(data: Buffer): LogoMimeType | null {
+export function detectImageType(data: Buffer): ImageMimeType | null {
   if (
     data.length >= 8 &&
     data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
