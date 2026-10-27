@@ -2,7 +2,7 @@
 
 Live-Matchmaking für Gründer*innen auf Präsenzveranstaltungen. Gesamtplan und Entscheidungen: [PLAN.md](PLAN.md).
 
-**Stand:** M2 fertig. Admins konfigurieren Events (M1). Teilnehmende treten per QR-Code bei, beantworten drei Fragen, machen ein Selfie und warten danach im Pool (M2). Matching, Runden und Präsentation folgen ab M3.
+**Stand:** M3 fertig. Admins konfigurieren Events (M1). Teilnehmende treten per QR-Code bei, beantworten drei Fragen, machen ein Selfie und warten danach im Pool (M2). Die Matching-Engine paart Runden und Nachzügler, ist aber noch nicht an Datenbank und Rundentakt angeschlossen (M3). Das folgt mit M4.
 
 ## Voraussetzungen
 
@@ -41,18 +41,19 @@ packages/
 
 ## Skripte
 
-| Befehl                                | Zweck                                                             |
-| ------------------------------------- | ----------------------------------------------------------------- |
-| `npm run dev`                         | Server und Web mit Hot Reload                                     |
-| `npm run typecheck`                   | TypeScript-Prüfung aller Workspaces                               |
-| `npm run lint` / `npm run format`     | ESLint / Prettier                                                 |
-| `npm test`                            | Vitest in allen Workspaces                                        |
-| `npm run build`                       | Web-Frontend bauen                                                |
-| `npm run db:generate`                 | Migration aus Änderungen an `schema.ts` erzeugen                  |
-| `npm run db:migrate`                  | Migrationen anwenden (passiert auch beim Serverstart)             |
-| `npm run db:seed`                     | Admin-Konto und Demo-Event anlegen (mehrfach ausführbar)          |
-| `npm run db:studio`                   | Drizzle Studio (DB-Browser)                                       |
-| `docker compose --profile full up -d` | Produktions-Container + Postgres + S3 auf <http://localhost:3000> |
+| Befehl                                                           | Zweck                                                                   |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `npm run dev`                                                    | Server und Web mit Hot Reload                                           |
+| `npm run typecheck`                                              | TypeScript-Prüfung aller Workspaces                                     |
+| `npm run lint` / `npm run format`                                | ESLint / Prettier                                                       |
+| `npm test`                                                       | Vitest in allen Workspaces                                              |
+| `npm run build`                                                  | Web-Frontend bauen                                                      |
+| `npm run db:generate`                                            | Migration aus Änderungen an `schema.ts` erzeugen                        |
+| `npm run db:migrate`                                             | Migrationen anwenden (passiert auch beim Serverstart)                   |
+| `npm run db:seed`                                                | Admin-Konto und Demo-Event anlegen (mehrfach ausführbar)                |
+| `npm run db:studio`                                              | Drizzle Studio (DB-Browser)                                             |
+| `npm run simulate -w @comatch/server -- --people 100 --rounds 8` | Matching-Simulation: Übereinstimmung, Wiederholungen, Laufzeit je Runde |
+| `docker compose --profile full up -d`                            | Produktions-Container + Postgres + S3 auf <http://localhost:3000>       |
 
 ## Technische Entscheidungen
 
@@ -69,3 +70,8 @@ packages/
 - **Teilnehmende** bekommen beim Beitritt ein Sitzungstoken. Es liegt im `localStorage` des Handys und wird als Bearer-Token gesendet; in der DB steht nur der Hash. Nach Neuladen oder gesperrtem Handy geht es dadurch an derselben Stelle weiter.
 - **Code-Splitting:** Der Admin-Bereich ist ein eigener Chunk, damit Handys im Event-WLAN weniger laden.
 - **Präsentationslink:** Das Token steht im Klartext in der DB, damit Admins den Link jederzeit wieder anzeigen können. Es erlaubt nur Lesezugriff und lässt sich neu erzeugen.
+- **Matching-Engine** (`apps/server/src/matching`): reine Funktionen ohne Datenbank und Zeitgeber, deterministisch über einen Seed.
+  - Übereinstimmung gewichtet und auf 0–1 normalisiert. Im Modus „ergänzend“ ohne Zuordnung passt jede andere Antwort; sobald eine Frage Zuordnungen hat, zählen nur die.
+  - Wiederholte Paare kosten so viel, dass sie nur entstehen, wenn es nicht anders geht; dann das Paar, dessen Treffen am längsten her ist.
+  - Bis 13 Personen werden alle Aufteilungen exakt durchgerechnet (höchstens ca. 50 ms). Darüber: greedy, dann Paartausch, gezielter Dreifach-Tausch bei Wiederholungen und Tausch mit der Dreiergruppe (100 Personen: ca. 5 ms).
+  - Pool: Wartende werden sofort miteinander gepaart (ohne Wiederholungen). Wer allein bleibt, kommt nach der Wartezeit als Dritte in ein offenes Match. Weniger als 60 s vor Rundenende wird niemand mehr gematcht.
