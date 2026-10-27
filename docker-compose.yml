@@ -1,0 +1,35 @@
+# Lokale Entwicklung.
+#   npm run db:up                      → nur Postgres (App läuft per `npm run dev` auf dem Host)
+#   docker compose --profile full up   → Postgres + App als Produktions-Container auf http://localhost:3000
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: comatch
+      POSTGRES_PASSWORD: comatch
+      POSTGRES_DB: comatch
+    ports:
+      # Host-Port 54340, damit eine lokal laufende Postgres-Instanz nicht kollidiert.
+      - "54340:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comatch -d comatch"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  app:
+    profiles: ["full"]
+    build: .
+    environment:
+      DATABASE_URL: postgres://comatch:comatch@postgres:5432/comatch
+      PUBLIC_BASE_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
