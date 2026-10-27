@@ -1,9 +1,10 @@
+import { POOL_CUTOFF_MS } from "@comatch/shared";
 import { describeGroup, joinScore, pairUp } from "./pair.ts";
 import { buildScoreTable } from "./score.ts";
 import type { MatchingContext, MatchPerson, PlannedGroup } from "./types.ts";
 
 /** Kurz vor Rundenende lohnt kein neues Match mehr; die Person wartet auf die nächste Runde. */
-export const MIN_REMAINING_MS = 60_000;
+export const MIN_REMAINING_MS = POOL_CUTOFF_MS;
 
 export interface PoolEntry {
   person: MatchPerson;

@@ -87,6 +87,8 @@ export const event = pgTable("event", {
   firstMatchDelayS: integer().notNull().default(30),
   currentRound: integer().notNull().default(0),
   roundEndsAt: timestamp({ withTimezone: true }),
+  /** Restzeit der Runde, während das Event pausiert ist (roundEndsAt ist dann leer). */
+  pausedRemainingMs: integer(),
   /**
    * Token, mit dem die Präsentationsansicht ohne Admin-Login lesen darf. Bewusst im Klartext,
    * damit Admins den Link jederzeit erneut anzeigen können; es gewährt nur Lesezugriff.

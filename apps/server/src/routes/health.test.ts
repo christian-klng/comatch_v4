@@ -16,6 +16,7 @@ describe("GET /api/health", () => {
       db: t.db,
       storage: t.storage,
       media: t.media,
+      live: t.live,
       publicBaseUrl: "http://x",
       cookieSecure: false,
       pingDb: async () => {

@@ -5,6 +5,7 @@ import { Spinner, cx } from "../../components/ui.tsx";
 import { ApiError, api, errorMessage } from "../../lib/api.ts";
 import { loadDraftAnswers, loadToken, saveDraftAnswers, saveToken } from "../../lib/participantSession.ts";
 import { Message, PrimaryButton, Screen, SecondaryButton } from "./parts.tsx";
+import { LiveView } from "./LiveView.tsx";
 import { SelfieStep } from "./SelfieStep.tsx";
 
 type Phase =
@@ -155,114 +156,6 @@ function QuestionStep({
   );
 }
 
-function Ready({
-  event,
-  me,
-  onChangeSelfie,
-  onLeave,
-}: {
-  event: PublicEvent;
-  me: ParticipantMe;
-  onChangeSelfie: () => void;
-  onLeave: () => Promise<void>;
-}) {
-  const [confirmLeave, setConfirmLeave] = useState(false);
-  const [leaving, setLeaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const labels = event.questions.flatMap(
-    (q, i) => q.options.find((o) => o.id === me.answers[i])?.label ?? [],
-  );
-  const hint =
-    event.status === "running"
-      ? "Dein erstes Match kommt gleich. Lass diese Seite einfach offen."
-      : event.status === "paused"
-        ? "Das Event ist gerade pausiert. Gleich geht es weiter."
-        : "Sobald das Event startet, bekommst du hier dein erstes Match. Lass diese Seite einfach offen.";
-
-  const leave = async () => {
-    setLeaving(true);
-    setError(null);
-    try {
-      await onLeave();
-    } catch (err) {
-      setError(errorMessage(err));
-      setLeaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="mt-2 flex flex-col items-center gap-5 text-center">
-        {me.selfieUrl && (
-          <img
-            src={me.selfieUrl}
-            alt="Dein Selfie"
-            className="aspect-[3/4] w-40 rounded-3xl object-cover ring-4 ring-brand"
-          />
-        )}
-        <div>
-          <h1 className="text-3xl font-bold">Du bist dabei!</h1>
-          <p className="mt-2 text-slate-400">{hint}</p>
-        </div>
-        <div className="flex gap-1.5" aria-hidden>
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="size-2.5 animate-pulse rounded-full bg-brand"
-              style={{ animationDelay: `${i * 200}ms` }}
-            />
-          ))}
-        </div>
-        {labels.length > 0 && (
-          <ul
-            className="flex flex-wrap justify-center gap-2 text-sm text-slate-300"
-            aria-label="Deine Antworten"
-          >
-            {labels.map((label) => (
-              <li key={label} className="rounded-full bg-white/5 px-3 py-1 ring-1 ring-white/10">
-                {label}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="mt-auto flex flex-col gap-3">
-        {error && (
-          <p role="alert" className="rounded-xl bg-rose-500/15 px-4 py-3 text-sm text-rose-200">
-            {error}
-          </p>
-        )}
-        {confirmLeave ? (
-          <div className="flex flex-col gap-3 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-            <p className="text-sm text-slate-300">
-              Wirklich aussteigen? Dein Foto und deine Antworten werden sofort gelöscht.
-            </p>
-            <PrimaryButton busy={leaving} className="bg-rose-600 shadow-none" onClick={() => void leave()}>
-              Ja, aussteigen
-            </PrimaryButton>
-            <SecondaryButton disabled={leaving} onClick={() => setConfirmLeave(false)}>
-              Abbrechen
-            </SecondaryButton>
-          </div>
-        ) : (
-          <>
-            <SecondaryButton onClick={onChangeSelfie}>Selfie ändern</SecondaryButton>
-            <button
-              type="button"
-              onClick={() => setConfirmLeave(true)}
-              className="py-2 text-sm text-slate-500 underline-offset-4 hover:underline"
-            >
-              Ich steige aus
-            </button>
-          </>
-        )}
-      </div>
-    </>
-  );
-}
-
 // ---------------------------------------------------------------------------
 
 export function JoinPage() {
@@ -366,6 +259,13 @@ export function JoinPage() {
     }
   };
 
+  // Sitzung vom Server abgelehnt (z. B. in einem anderen Tab ausgestiegen oder entfernt).
+  const sessionInvalid = useCallback(() => {
+    resetSession();
+    setNotice("Deine Sitzung ist abgelaufen. Du kannst neu beitreten.");
+    setPhase({ name: "welcome" });
+  }, [resetSession]);
+
   const leave = async () => {
     await api("/participant", { method: "DELETE", token: token! });
     resetSession();
@@ -447,15 +347,17 @@ export function JoinPage() {
         />
       )}
 
-      {phase.name === "ready" && me && (
-        <Ready
+      {phase.name === "ready" && me && token && (
+        <LiveView
           event={event}
           me={me}
+          token={token}
           onChangeSelfie={() => {
             setError(null);
             setPhase({ name: "selfie" });
           }}
           onLeave={leave}
+          onSessionInvalid={sessionInvalid}
         />
       )}
 

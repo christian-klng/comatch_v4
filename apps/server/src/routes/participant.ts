@@ -12,7 +12,10 @@ import { requireParticipant } from "../participants/session.ts";
 const EXTENSIONS = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const;
 
 /** Endpunkte für das Handy einer teilnehmenden Person (Bearer-Token). */
-export const participantRoutes: FastifyPluginAsync<AppContext> = async (app, { db, storage, media }) => {
+export const participantRoutes: FastifyPluginAsync<AppContext> = async (
+  app,
+  { db, storage, media, live },
+) => {
   app.addHook("onRequest", requireParticipant(db));
   app.addContentTypeParser(
     [...IMAGE_MIME_TYPES],
@@ -49,6 +52,8 @@ export const participantRoutes: FastifyPluginAsync<AppContext> = async (app, { d
         request.log.warn({ err, key: me.selfieKey }, "Altes Selfie konnte nicht gelöscht werden");
       });
     }
+    // Neues Selfie: Gegenüber und Leinwand sehen es sofort; beim ersten Selfie startet die Suche.
+    await live.participantChanged(me.eventId);
     return getParticipantMe(db, media, updated!);
   });
 
@@ -57,6 +62,8 @@ export const participantRoutes: FastifyPluginAsync<AppContext> = async (app, { d
     const me = request.participant!;
     await db.delete(participant).where(eq(participant.id, me.id));
     await storage.deletePrefix(selfiePrefix(me.eventId, me.id));
+    live.invalidate(me.id);
+    await live.participantChanged(me.eventId);
     return reply.code(204).send();
   });
 };

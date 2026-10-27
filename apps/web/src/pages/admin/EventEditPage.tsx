@@ -27,6 +27,7 @@ import {
 import { api, ApiError, errorMessage } from "../../lib/api.ts";
 import { fromLocalInput, toLocalInput } from "../../lib/format.ts";
 import { useClipboard } from "../../lib/useClipboard.ts";
+import { EventControls } from "./EventControls.tsx";
 
 const DEFAULT_BRAND = "#6366f1";
 const ROUND_MINUTES = [2, 3, 4, 5, 6, 7, 8, 10, 12, 15].filter(
@@ -561,52 +562,6 @@ const TABS = [
   { id: "links", label: "QR-Code & Links", Component: LinksTab },
 ] as const;
 
-/** Entwurf ↔ Offen. Start, Pause und Ende kommen mit der Live-Steuerung. */
-function JoinToggle({ event, onSaved }: TabProps) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  if (event.status !== "draft" && event.status !== "open") return null;
-
-  const opening = event.status === "draft";
-  const toggle = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      onSaved(
-        await api<EventDetail>(`/admin/events/${event.id}/status`, {
-          method: "PUT",
-          body: { status: opening ? "open" : "draft" },
-        }),
-      );
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-3 sm:ml-auto">
-      {error && <span className="text-sm text-rose-600">{error}</span>}
-      {opening ? (
-        <Button busy={busy} onClick={() => void toggle()}>
-          Beitritt öffnen
-        </Button>
-      ) : (
-        <Button
-          variant="secondary"
-          busy={busy}
-          disabled={event.participantCount > 0}
-          title={event.participantCount > 0 ? "Es sind schon Personen beigetreten." : undefined}
-          onClick={() => void toggle()}
-        >
-          Zurück zum Entwurf
-        </Button>
-      )}
-    </div>
-  );
-}
-
 export function EventEditPage() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
@@ -634,8 +589,9 @@ export function EventEditPage() {
         <span className="text-sm text-slate-500">
           {event.participantCount} Teilnehmende · Code <span className="font-mono">{event.slug}</span>
         </span>
-        <JoinToggle event={event} onSaved={setEvent} />
       </div>
+
+      <EventControls event={event} onChanged={setEvent} />
 
       <div role="tablist" className="mb-6 flex gap-1 overflow-x-auto border-b border-slate-200">
         {TABS.map((t) => (

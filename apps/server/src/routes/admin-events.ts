@@ -6,6 +6,7 @@ import {
   LOGO_MAX_BYTES,
   IMAGE_MIME_TYPES,
   eventCreateInput,
+  eventControlInput,
   eventGeneralInput,
   questionsInput,
 } from "@comatch/shared";
@@ -23,7 +24,7 @@ const statusInput = z.object({ status: z.enum(["draft", "open"]) });
 /** Event-Verwaltung. Läuft im geschützten /admin-Bereich. */
 export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   app,
-  { db, storage, publicBaseUrl },
+  { db, storage, live, publicBaseUrl },
 ) => {
   // Logos kommen als rohe Bilddaten (kein Multipart), begrenzt auf LOGO_MAX_BYTES.
   app.addContentTypeParser(
@@ -97,6 +98,14 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
     return detail(id);
   });
 
+  /** Live-Steuerung: Start, Pause, Fortsetzen, nächste Runde, Ende. */
+  app.post("/events/:id/control", async (request) => {
+    const { id } = idParams.parse(request.params);
+    const { action } = eventControlInput.parse(request.body);
+    await live.control(id, action);
+    return detail(id);
+  });
+
   app.put("/events/:id/logo", async (request) => {
     const { id } = idParams.parse(request.params);
     await requireEvent(id);
@@ -144,6 +153,7 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
         "Ein laufendes Event kann nicht gelöscht werden. Bitte zuerst beenden.",
       );
     }
+    live.forget(id);
     await db.delete(event).where(eq(event.id, id));
     await storage.deletePrefix(`events/${id}/`);
     return reply.code(204).send();

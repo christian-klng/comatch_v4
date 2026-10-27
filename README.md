@@ -2,7 +2,7 @@
 
 Live-Matchmaking für Gründer*innen auf Präsenzveranstaltungen. Gesamtplan und Entscheidungen: [PLAN.md](PLAN.md).
 
-**Stand:** M3 fertig. Admins konfigurieren Events (M1). Teilnehmende treten per QR-Code bei, beantworten drei Fragen, machen ein Selfie und warten danach im Pool (M2). Die Matching-Engine paart Runden und Nachzügler, ist aber noch nicht an Datenbank und Rundentakt angeschlossen (M3). Das folgt mit M4.
+**Stand:** M4 fertig. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3). Jetzt laufen die Runden automatisch: Admins starten, pausieren, beenden und schalten weiter. Die Handys bekommen ihr Match und den Countdown live per Socket.IO (M4). Codes bestätigen (M5) und die Leinwand (M6) folgen.
 
 ## Voraussetzungen
 
@@ -41,19 +41,20 @@ packages/
 
 ## Skripte
 
-| Befehl                                                           | Zweck                                                                   |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `npm run dev`                                                    | Server und Web mit Hot Reload                                           |
-| `npm run typecheck`                                              | TypeScript-Prüfung aller Workspaces                                     |
-| `npm run lint` / `npm run format`                                | ESLint / Prettier                                                       |
-| `npm test`                                                       | Vitest in allen Workspaces                                              |
-| `npm run build`                                                  | Web-Frontend bauen                                                      |
-| `npm run db:generate`                                            | Migration aus Änderungen an `schema.ts` erzeugen                        |
-| `npm run db:migrate`                                             | Migrationen anwenden (passiert auch beim Serverstart)                   |
-| `npm run db:seed`                                                | Admin-Konto und Demo-Event anlegen (mehrfach ausführbar)                |
-| `npm run db:studio`                                              | Drizzle Studio (DB-Browser)                                             |
-| `npm run simulate -w @comatch/server -- --people 100 --rounds 8` | Matching-Simulation: Übereinstimmung, Wiederholungen, Laufzeit je Runde |
-| `docker compose --profile full up -d`                            | Produktions-Container + Postgres + S3 auf <http://localhost:3000>       |
+| Befehl                                                                                    | Zweck                                                                         |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `npm run dev`                                                                             | Server und Web mit Hot Reload                                                 |
+| `npm run typecheck`                                                                       | TypeScript-Prüfung aller Workspaces                                           |
+| `npm run lint` / `npm run format`                                                         | ESLint / Prettier                                                             |
+| `npm test`                                                                                | Vitest in allen Workspaces                                                    |
+| `npm run build`                                                                           | Web-Frontend bauen                                                            |
+| `npm run db:generate`                                                                     | Migration aus Änderungen an `schema.ts` erzeugen                              |
+| `npm run db:migrate`                                                                      | Migrationen anwenden (passiert auch beim Serverstart)                         |
+| `npm run db:seed`                                                                         | Admin-Konto und Demo-Event anlegen (mehrfach ausführbar)                      |
+| `npm run db:studio`                                                                       | Drizzle Studio (DB-Browser)                                                   |
+| `npm run simulate -w @comatch/server -- --people 100 --rounds 8`                          | Matching-Simulation: Übereinstimmung, Wiederholungen, Laufzeit je Runde       |
+| `npm run bots -w @comatch/server -- --event <code> --count 5 --url http://localhost:5173` | Simulierte Teilnehmende: treten bei, laden ein Selfie hoch, bleiben verbunden |
+| `docker compose --profile full up -d`                                                     | Produktions-Container + Postgres + S3 auf <http://localhost:3000>             |
 
 ## Technische Entscheidungen
 
@@ -75,3 +76,10 @@ packages/
   - Wiederholte Paare kosten so viel, dass sie nur entstehen, wenn es nicht anders geht; dann das Paar, dessen Treffen am längsten her ist.
   - Bis 13 Personen werden alle Aufteilungen exakt durchgerechnet (höchstens ca. 50 ms). Darüber: greedy, dann Paartausch, gezielter Dreifach-Tausch bei Wiederholungen und Tausch mit der Dreiergruppe (100 Personen: ca. 5 ms).
   - Pool: Wartende werden sofort miteinander gepaart (ohne Wiederholungen). Wer allein bleibt, kommt nach der Wartezeit als Dritte in ein offenes Match. Weniger als 60 s vor Rundenende wird niemand mehr gematcht.
+- **Live-Betrieb** (`apps/server/src/live`): Postgres bleibt die Quelle der Wahrheit, im Speicher liegen nur Timer und offene Verbindungen. Alle Änderungen an einem Event laufen nacheinander durch eine Warteschlange. Nach einem Neustart werden laufende Runden aus `round_ends_at` fortgesetzt.
+  - Jede Änderung schickt jedem Handy seinen vollständigen Zustand („Snapshot statt Delta“); Leinwand und Admins bekommen Zähler und Rundentakt. Countdowns rechnen mit dem gemessenen Uhren-Offset.
+  - Pool-Matcher alle 3 s während einer Runde. Wer länger als 60 s keine Verbindung hatte, wird zum Rundenwechsel inaktiv und kommt beim Wiederverbinden zurück in den Pool.
+  - Verlässt jemand ein Match (Austritt), kommt das Gegenüber ohne Wartezeit zurück in den Pool.
+  - Beim Herunterfahren schließt der Server nur die Transporte, damit sich Clients nach einem Neustart selbst neu verbinden. Clients verbinden sich auch nach einer Trennung durch den Server neu, außer ihre Sitzung wurde abgelehnt.
+  - Uhr und Timer sind austauschbar (`createManualClock`), dadurch laufen Rundenwechsel in den Tests ohne Warten.
+- **Bestätigungscodes** sind vorerst dreistellige Zahlen ohne Auswahl; Format und Köder kommen mit M5.

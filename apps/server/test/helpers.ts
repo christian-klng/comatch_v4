@@ -1,12 +1,14 @@
 import { sql as rawSql } from "drizzle-orm";
 import { afterAll, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
-import { DEFAULT_QUESTIONS, type EventStatus } from "@comatch/shared";
+import { DEFAULT_QUESTIONS, type EventLive, type EventStatus, type ParticipantLive } from "@comatch/shared";
 import { buildApp } from "../src/app.ts";
 import { createDb } from "../src/db/client.ts";
 import { adminUser, event } from "../src/db/schema.ts";
 import { createEvent } from "../src/events/service.ts";
 import { createMediaSigner } from "../src/lib/media.ts";
+import { createManualClock } from "../src/live/clock.ts";
+import { LiveEvents, type Emitter } from "../src/live/runtime.ts";
 import { hashPassword } from "../src/lib/password.ts";
 import { createMemoryStorage } from "../src/storage/storage.ts";
 import { TEST_DATABASE_URL } from "./db-url.ts";
@@ -21,9 +23,23 @@ export function useTestApp() {
   const { db, sql } = createDb(TEST_DATABASE_URL);
   const storage = createMemoryStorage();
   const media = createMediaSigner("test-secret-test-secret-test-secret");
-  const appPromise = buildApp({ db, storage, media, publicBaseUrl: PUBLIC_BASE_URL, cookieSecure: false });
+  const clock = createManualClock();
+  const live = new LiveEvents({ db, media, clock });
+  const emits = recordingEmitter();
+  live.attach(emits);
+  const appPromise = buildApp({
+    db,
+    storage,
+    media,
+    live,
+    publicBaseUrl: PUBLIC_BASE_URL,
+    cookieSecure: false,
+  });
 
   beforeEach(async () => {
+    await live.idle();
+    live.reset();
+    emits.clear();
     const tables = await db.execute<{ tablename: string }>(
       rawSql`select tablename from pg_tables where schemaname = 'public'`,
     );
@@ -32,6 +48,8 @@ export function useTestApp() {
   });
 
   afterAll(async () => {
+    live.stop();
+    await live.idle();
     await (await appPromise).close();
     await sql.end();
   });
@@ -40,7 +58,13 @@ export function useTestApp() {
     db,
     storage,
     media,
+    clock,
+    live,
+    emits,
     app: () => appPromise,
+
+    /** Spult die Testuhr vor; Timer laufen und deren DB-Arbeit wird jeweils abgewartet. */
+    advance: (ms: number) => clock.advance(ms, () => live.idle()),
 
     /** Legt ein Event mit den Standardfragen an (Status standardmäßig „offen“). */
     async createEvent(status: EventStatus = "open", slug = "testev") {
@@ -78,4 +102,28 @@ export function useTestApp() {
     },
   };
   return ctx;
+}
+
+/** Merkt sich alle Live-Nachrichten, damit Tests prüfen können, wer was bekommen hat. */
+function recordingEmitter() {
+  const participantStates = new Map<string, ParticipantLive[]>();
+  const eventStates = new Map<string, EventLive[]>();
+  const invalidated: string[] = [];
+  const emitter: Emitter = {
+    toParticipant: (id, state) => participantStates.set(id, [...(participantStates.get(id) ?? []), state]),
+    toEvent: (id, state) => eventStates.set(id, [...(eventStates.get(id) ?? []), state]),
+    invalidate: (id) => invalidated.push(id),
+  };
+  return {
+    ...emitter,
+    invalidated,
+    /** Letzter Zustand, den ein Handy bekommen hat. */
+    lastFor: (participantId: string) => participantStates.get(participantId)?.at(-1),
+    lastEvent: (eventId: string) => eventStates.get(eventId)?.at(-1),
+    clear() {
+      participantStates.clear();
+      eventStates.clear();
+      invalidated.length = 0;
+    },
+  };
 }

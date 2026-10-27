@@ -4,6 +4,8 @@ import { createDb } from "./db/client.ts";
 import { runMigrations } from "./db/migrate.ts";
 import { createMediaSigner } from "./lib/media.ts";
 import { randomToken } from "./lib/tokens.ts";
+import { systemClock } from "./live/clock.ts";
+import { LiveEvents } from "./live/runtime.ts";
 import { attachRealtime } from "./realtime/socket.ts";
 import { createS3Storage } from "./storage/s3.ts";
 
@@ -21,6 +23,9 @@ const storage = createS3Storage({
 });
 await storage.ensureBucket();
 
+const media = createMediaSigner(config.MEDIA_SIGNING_SECRET ?? randomToken(32));
+const live = new LiveEvents({ db, media, clock: systemClock });
+
 const app = await buildApp({
   logger:
     config.NODE_ENV === "development"
@@ -28,17 +33,23 @@ const app = await buildApp({
       : { level: "info" },
   db,
   storage,
-  media: createMediaSigner(config.MEDIA_SIGNING_SECRET ?? randomToken(32)),
+  media,
+  live,
   publicBaseUrl: config.PUBLIC_BASE_URL,
   cookieSecure: config.COOKIE_SECURE,
   webDistDir: config.WEB_DIST_DIR,
 });
 
-const io = attachRealtime(app.server);
+const io = attachRealtime(app.server, { db, live });
+live.setLogger(app.log);
 
 const shutdown = async (signal: string) => {
   app.log.info(`${signal} empfangen, fahre herunter …`);
-  io.disconnectSockets(true);
+  live.stop();
+  // Nur die Transporte schließen: Clients sehen einen Abbruch und verbinden sich nach dem
+  // Neustart selbst neu. (disconnectSockets() würde das automatische Neuverbinden abschalten.)
+  io.engine.close();
+  await live.idle();
   await app.close();
   await sql.end();
   process.exit(0);
@@ -47,3 +58,5 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 await app.listen({ port: config.API_PORT, host: config.HOST });
+// Laufende Events nach einem Neustart fortsetzen (Timer aus round_ends_at).
+await live.restore();
