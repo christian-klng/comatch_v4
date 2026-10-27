@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { eventSettingsInput, type QuestionInput } from "./event-config.ts";
+import {
+  DEFAULT_QUESTIONS,
+  eventSettingsInput,
+  normalizeComplements,
+  questionsInput,
+  type QuestionInput,
+} from "./event-config.ts";
 
 const question = (overrides: Partial<QuestionInput> = {}) => ({
   text: "In welcher Phase ist dein Startup?",
@@ -62,5 +68,40 @@ describe("eventSettingsInput", () => {
       ],
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("normalizeComplements", () => {
+  it("macht Zuordnungen symmetrisch und entfernt Duplikate", () => {
+    const normalized = normalizeComplements({
+      text: "Was bringst du mit?",
+      matchMode: "complementary",
+      weight: 1,
+      options: [
+        { label: "Tech", complements: [1, 1] },
+        { label: "Business", complements: [] },
+        { label: "Design", complements: [1] },
+      ],
+    });
+    expect(normalized.options.map((o) => o.complements)).toEqual([[1], [0, 2], [1]]);
+  });
+
+  it("leert Zuordnungen im Modus gleich", () => {
+    const normalized = normalizeComplements({
+      text: "x",
+      matchMode: "same",
+      weight: 1,
+      options: [
+        { label: "A", complements: [1] },
+        { label: "B", complements: [] },
+      ],
+    });
+    expect(normalized.options.every((o) => o.complements.length === 0)).toBe(true);
+  });
+});
+
+describe("DEFAULT_QUESTIONS", () => {
+  it("sind gültig", () => {
+    expect(questionsInput.safeParse(DEFAULT_QUESTIONS).success).toBe(true);
   });
 });

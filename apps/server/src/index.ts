@@ -1,4 +1,3 @@
-import { sql as rawSql } from "drizzle-orm";
 import { buildApp } from "./app.ts";
 import { loadConfig } from "./config.ts";
 import { createDb } from "./db/client.ts";
@@ -15,9 +14,9 @@ const app = await buildApp({
     config.NODE_ENV === "development"
       ? { level: "info", transport: { target: "pino-pretty", options: { translateTime: "HH:MM:ss" } } }
       : { level: "info" },
-  pingDb: async () => {
-    await db.execute(rawSql`select 1`);
-  },
+  db,
+  publicBaseUrl: config.PUBLIC_BASE_URL,
+  cookieSecure: config.COOKIE_SECURE,
   webDistDir: config.WEB_DIST_DIR,
 });
 

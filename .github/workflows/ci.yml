@@ -8,6 +8,20 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: comatch
+          POSTGRES_PASSWORD: comatch
+          POSTGRES_DB: comatch
+        ports:
+          - 54340:5432
+        options: >-
+          --health-cmd "pg_isready -U comatch -d comatch"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

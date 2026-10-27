@@ -2,7 +2,7 @@
 
 Live-Matchmaking für Gründer*innen auf Präsenzveranstaltungen. Gesamtplan und Entscheidungen: [PLAN.md](PLAN.md).
 
-**Stand:** Meilenstein M0 (Projektsetup). Die Ansichten sind noch Platzhalter.
+**Stand:** M1 (Moderationsansicht) fertig: Admin-Login, Team-Einladungen, Event-Verwaltung, Fragen-Editor, Branding, QR-Code. Präsentation und Teilnahme sind noch Platzhalter.
 
 ## Voraussetzungen
 
@@ -19,7 +19,7 @@ npm run db:seed    # Migrationen + Admin-Konto + Demo-Event „demo“
 npm run dev        # Server :3000 + Web :5173
 ```
 
-Dann <http://localhost:5173> öffnen. Die Dev-Statusseite zeigt, ob API, Datenbank und Socket.IO laufen.
+Dann <http://localhost:5173/admin> öffnen und mit dem Test-Admin aus `.env.example` anmelden. Unter <http://localhost:5173> zeigt eine Statusseite, ob API, Datenbank und Socket.IO laufen.
 
 Echte Handys im selben WLAN erreichen die App über die „Network“-Adresse, die Vite beim Start ausgibt.
 
@@ -57,4 +57,7 @@ packages/
 - **TypeScript 6.0** statt 7: typescript-eslint unterstützt TypeScript 7 noch nicht.
 - **Statuswerte** stehen einmal in `packages/shared/src/domain.ts` und werden für die Postgres-Enums wiederverwendet.
 - Der Server-Port heißt **`API_PORT`** (nicht `PORT`), weil Tools wie die Vorschau `PORT` für den Vite-Server setzen.
-- **Ein S3-Speicher für Selfies** kommt mit M2 dazu (lokal ein S3-Emulator, in Produktion Hetzner Object Storage).
+- **Server-Tests** laufen gegen die eigene Datenbank `comatch_test` im selben Postgres-Container; sie wird automatisch angelegt und vor jedem Test geleert.
+- **Admin-Sessions** liegen in Postgres (Cookie `comatch_admin`, httpOnly, 14 Tage). Neue Admins kommen nur per Einladungslink dazu.
+- **Logos** liegen klein (≤ 512 KB) direkt in Postgres. Der S3-Speicher für Selfies kommt mit M2 (lokal ein S3-Emulator, in Produktion Hetzner Object Storage).
+- **Präsentationslink:** Das Token steht im Klartext in der DB, damit Admins den Link jederzeit wieder anzeigen können. Es erlaubt nur Lesezugriff und lässt sich neu erzeugen.

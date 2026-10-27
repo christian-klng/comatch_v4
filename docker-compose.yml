@@ -25,6 +25,8 @@ services:
     environment:
       DATABASE_URL: postgres://comatch:comatch@postgres:5432/comatch
       PUBLIC_BASE_URL: http://localhost:3000
+      # Lokal ohne HTTPS; in Produktion hinter Caddy bleibt das Cookie "Secure".
+      COOKIE_SECURE: "false"
     ports:
       - "3000:3000"
     depends_on:

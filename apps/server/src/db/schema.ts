@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  customType,
   index,
   integer,
   pgEnum,
@@ -30,6 +31,10 @@ export const matchGroupStatus = pgEnum("match_group_status", MATCH_GROUP_STATUSE
 
 const createdAt = () => timestamp({ withTimezone: true }).notNull().defaultNow();
 
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
+
 // ---------------------------------------------------------------------------
 // Admins
 // ---------------------------------------------------------------------------
@@ -40,6 +45,31 @@ export const adminUser = pgTable("admin_user", {
   passwordHash: text().notNull(),
   invitedBy: uuid().references((): AnyPgColumn => adminUser.id, { onDelete: "set null" }),
   createdAt: createdAt(),
+});
+
+export const adminSession = pgTable(
+  "admin_session",
+  {
+    /** SHA-256 des Session-Tokens aus dem Cookie. */
+    tokenHash: text().primaryKey(),
+    adminId: uuid()
+      .notNull()
+      .references(() => adminUser.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.adminId)],
+);
+
+export const adminInvite = pgTable("admin_invite", {
+  id: uuid().primaryKey().defaultRandom(),
+  email: text().notNull(),
+  /** SHA-256 des Einladungs-Tokens; der Klartext steht nur im Einladungslink. */
+  tokenHash: text().notNull().unique(),
+  invitedBy: uuid().references(() => adminUser.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+  acceptedAt: timestamp({ withTimezone: true }),
 });
 
 // ---------------------------------------------------------------------------
@@ -57,9 +87,18 @@ export const event = pgTable("event", {
   firstMatchDelayS: integer().notNull().default(30),
   currentRound: integer().notNull().default(0),
   roundEndsAt: timestamp({ withTimezone: true }),
-  /** Hash des Tokens, mit dem die Präsentationsansicht ohne Admin-Login lesen darf. */
-  presenterTokenHash: text(),
-  logoKey: text(),
+  /**
+   * Token, mit dem die Präsentationsansicht ohne Admin-Login lesen darf. Bewusst im Klartext,
+   * damit Admins den Link jederzeit erneut anzeigen können; es gewährt nur Lesezugriff.
+   */
+  presenterToken: text()
+    .notNull()
+    .unique()
+    .default(sql`replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')`),
+  /** Logos sind klein (≤ 512 KB) und liegen direkt in der DB; Selfies kommen in den Object Storage. */
+  logoData: bytea(),
+  logoMime: text(),
+  logoUpdatedAt: timestamp({ withTimezone: true }),
   primaryColor: text(),
   createdBy: uuid().references(() => adminUser.id, { onDelete: "set null" }),
   createdAt: createdAt(),

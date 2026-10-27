@@ -8,14 +8,19 @@ const envSchema = z.object({
   PUBLIC_BASE_URL: z.url().default("http://localhost:5173"),
   /** Pfad zum gebauten Web-Frontend; wird in Produktion statisch ausgeliefert. */
   WEB_DIST_DIR: z.string().optional(),
+  /** Session-Cookie nur über HTTPS senden. Standard: an in Produktion. */
+  COOKIE_SECURE: z.stringbool().optional(),
 });
 
-export type Config = z.infer<typeof envSchema>;
+export type Config = z.infer<typeof envSchema> & { COOKIE_SECURE: boolean };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const result = envSchema.safeParse(env);
   if (!result.success) {
     throw new Error(`Ungültige Umgebungsvariablen:\n${z.prettifyError(result.error)}`);
   }
-  return result.data;
+  return {
+    ...result.data,
+    COOKIE_SECURE: result.data.COOKIE_SECURE ?? result.data.NODE_ENV === "production",
+  };
 }

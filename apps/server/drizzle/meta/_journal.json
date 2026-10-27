@@ -8,6 +8,20 @@
       "when": 1793093167164,
       "tag": "0000_normal_obadiah_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793097245114,
+      "tag": "0001_drop_presenter_hash_and_logo_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793097245483,
+      "tag": "0002_admin_auth_and_branding",
+      "breakpoints": true
     }
   ]
 }
