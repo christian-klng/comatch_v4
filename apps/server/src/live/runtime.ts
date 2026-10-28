@@ -1,14 +1,16 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
-import type {
-  ConfirmCodeResult,
-  EventControlAction,
-  EventLive,
-  EventStatus,
-  ParticipantLive,
+import {
+  EXTEND_ROUND_MS,
+  type ConfirmCodeResult,
+  type EventControlAction,
+  type EventLive,
+  type EventStatus,
+  type ParticipantLive,
+  type SessionEndReason,
 } from "@comatch/shared";
 import type { Db } from "../db/client.ts";
-import { event, matchGroup, participant, round } from "../db/schema.ts";
+import { event, matchGroup, matchMember, participant, round } from "../db/schema.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
 import type { MediaSigner } from "../lib/media.ts";
 import { matchPool, pairRound } from "../matching/index.ts";
@@ -39,7 +41,7 @@ const EVENT_STATE_DEBOUNCE_MS = 1_000;
 export interface Emitter {
   toParticipant(participantId: string, state: ParticipantLive): void;
   toEvent(eventId: string, state: EventLive): void;
-  invalidate(participantId: string): void;
+  invalidate(participantId: string, reason: SessionEndReason): void;
 }
 
 export interface LiveDeps {
@@ -59,6 +61,7 @@ const TRANSITIONS: Record<EventControlAction, readonly EventStatus[]> = {
   pause: ["running"],
   resume: ["paused"],
   next_round: ["running"],
+  extend: ["running", "paused"],
   end: ["open", "running", "paused"],
 };
 
@@ -233,6 +236,24 @@ export class LiveEvents {
           this.schedule({ ...ev, status: "running", roundEndsAt: endsAt });
           break;
         }
+        case "extend":
+          if (ev.status === "paused") {
+            await db
+              .update(event)
+              .set({ pausedRemainingMs: (ev.pausedRemainingMs ?? 0) + EXTEND_ROUND_MS })
+              .where(eq(event.id, eventId));
+          } else {
+            const endsAt = new Date((ev.roundEndsAt?.getTime() ?? now) + EXTEND_ROUND_MS);
+            await db.transaction(async (tx) => {
+              await tx.update(event).set({ roundEndsAt: endsAt }).where(eq(event.id, eventId));
+              await tx
+                .update(round)
+                .set({ endsAt })
+                .where(and(eq(round.eventId, eventId), eq(round.number, ev.currentRound)));
+            });
+            this.schedule({ ...ev, roundEndsAt: endsAt });
+          }
+          break;
         case "end":
           await db.transaction(async (tx) => {
             await tx
@@ -445,6 +466,53 @@ export class LiveEvents {
     });
   }
 
+  /**
+   * Eingriff der Moderation: Selfie zurücksetzen (die Person muss neu fotografieren) oder die
+   * Person entfernen. Offene Matches der Person lösen sich auf; gibt den alten Selfie-Schlüssel
+   * zurück, damit das Bild gelöscht werden kann.
+   */
+  moderate(
+    eventId: string,
+    participantId: string,
+    action: "reset_selfie" | "remove",
+  ): Promise<{ selfieKey: string | null }> {
+    return this.run(eventId, async () => {
+      const { db } = this.deps;
+      const ev = await loadLiveEvent(db, eventId);
+      const [row] = await db
+        .select({ selfieKey: participant.selfieKey, status: participant.status })
+        .from(participant)
+        .where(and(eq(participant.id, participantId), eq(participant.eventId, eventId)));
+      if (!ev || !row || row.status === "removed") throw notFound("participant_not_found");
+
+      await db.transaction(async (tx) => {
+        const roundRow = await currentRoundRow(tx, ev);
+        const open = (await loadRoundGroups(tx, roundRow?.id ?? null)).filter(
+          (g) => g.status === "open" && g.members.some((m) => m.participantId === participantId),
+        );
+        if (open.length > 0) {
+          await tx.delete(matchMember).where(
+            and(
+              inArray(
+                matchMember.matchGroupId,
+                open.map((g) => g.id),
+              ),
+              eq(matchMember.participantId, participantId),
+            ),
+          );
+        }
+        await tx
+          .update(participant)
+          .set({ status: action === "remove" ? "removed" : "onboarding", selfieKey: null, poolSince: null })
+          .where(eq(participant.id, participantId));
+      });
+      await this.repairGroups(eventId);
+      if (action === "remove") this.invalidate(participantId, "removed");
+      await this.broadcast(eventId);
+      return { selfieKey: row.selfieKey };
+    });
+  }
+
   private async repairGroups(eventId: string) {
     const { db, clock } = this.deps;
     const ev = await loadLiveEvent(db, eventId);
@@ -535,9 +603,14 @@ export class LiveEvents {
     });
   }
 
-  /** Andere Tabs derselben Person abmelden (nach „Ich steige aus“). */
-  invalidate(participantId: string) {
-    this.emitter.invalidate(participantId);
+  /** Alle Tabs der Person abmelden (nach „Ich steige aus“ oder Entfernen durch die Moderation). */
+  invalidate(participantId: string, reason: SessionEndReason = "unknown") {
+    this.emitter.invalidate(participantId, reason);
+  }
+
+  /** Verbunden oder erst seit Kurzem weg (für die Moderationsansicht). */
+  isPresent(p: { id: string; lastSeenAt: Date }) {
+    return isPresent(p, this.connectedIds(), this.deps.clock.now());
   }
 
   // -------------------------------------------------------------------------

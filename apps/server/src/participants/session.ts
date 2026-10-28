@@ -25,7 +25,10 @@ export function requireParticipant(db: Db) {
     const row = token
       ? await db.query.participant.findFirst({ where: eq(participant.sessionTokenHash, sha256(token)) })
       : undefined;
-    if (!row || row.status === "removed") {
+    if (row?.status === "removed") {
+      throw new HttpError(401, "participant_removed", "Die Moderation hat dich aus dem Event entfernt.");
+    }
+    if (!row) {
       throw new HttpError(401, "participant_unknown", "Deine Sitzung ist abgelaufen. Bitte neu beitreten.");
     }
     request.participant = row;

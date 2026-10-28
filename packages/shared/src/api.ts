@@ -1,5 +1,5 @@
 // Antwort-Typen der HTTP-API.
-import type { EventStatus } from "./domain.ts";
+import type { EventStatus, MatchGroupKind, ParticipantStatus } from "./domain.ts";
 import type { QuestionInput } from "./event-config.ts";
 
 export interface ApiErrorBody {
@@ -60,4 +60,43 @@ export interface EventDetail extends EventSummary {
   /** Fragen sind gesperrt, sobald jemand beigetreten ist (sonst passen Antworten nicht mehr). */
   questionsLocked: boolean;
   questions: QuestionInput[];
+}
+
+/** Eine teilnehmende Person in der Moderationsansicht (anonym, Nummer nach Beitritt). */
+export interface AdminParticipant {
+  id: string;
+  /** „T001“ usw., nach Beitrittszeit. */
+  number: string;
+  status: ParticipantStatus;
+  selfieUrl: string | null;
+  joinedAt: string;
+  /** Verbunden oder erst seit Kurzem weg. */
+  online: boolean;
+  /** Gewählte Antwort je Frage (Beschriftung), in Fragenreihenfolge. */
+  answers: string[];
+  confirmedMatches: number;
+}
+
+export interface EventStats {
+  /** Fertig angemeldet (mit Selfie), auch wenn inzwischen inaktiv. */
+  participants: number;
+  rounds: number;
+  matches: {
+    total: number;
+    confirmed: number;
+    expired: number;
+    open: number;
+    /** Bestätigte unter den abgeschlossenen Matches (ohne offene), 0–1; null ohne Daten. */
+    confirmationRate: number | null;
+  };
+  perPerson: {
+    average: number;
+    median: number;
+    max: number;
+    withoutMatch: number;
+    /** Wie viele Personen wie viele bestätigte Matches haben (0 … max). */
+    histogram: { matches: number; people: number }[];
+  };
+  byRound: { round: number; matches: number; confirmed: number; confirmationRate: number | null }[];
+  byKind: Record<MatchGroupKind, { matches: number; confirmed: number }>;
 }

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { POOL_CUTOFF_MS, type ParticipantLive, type ParticipantMe, type PublicEvent } from "@comatch/shared";
+import {
+  POOL_CUTOFF_MS,
+  type ParticipantLive,
+  type ParticipantMe,
+  type PublicEvent,
+  type SessionEndReason,
+} from "@comatch/shared";
 import { errorMessage } from "../../lib/api.ts";
 import { formatCountdown, useLive, useRemaining } from "../../lib/live.ts";
 import { useWakeLock } from "../../lib/wakeLock.ts";
@@ -160,13 +166,16 @@ export function LiveView({
   onChangeSelfie,
   onLeave,
   onSessionInvalid,
+  onSelfieReset,
 }: {
   event: PublicEvent;
   me: ParticipantMe;
   token: string;
   onChangeSelfie: () => void;
   onLeave: () => Promise<void>;
-  onSessionInvalid: () => void;
+  onSessionInvalid: (reason: SessionEndReason) => void;
+  /** Die Moderation hat das Selfie zurückgesetzt: neu fotografieren. */
+  onSelfieReset: () => void;
 }) {
   const live = useLive<ParticipantLive>({ role: "participant", token }, "state");
   // Antworten auf eigene Aktionen kommen per REST und Socket; der neuere Zustand gewinnt.
@@ -178,8 +187,13 @@ export function LiveView({
   useVibrate(state);
 
   useEffect(() => {
-    if (live.invalid) onSessionInvalid();
+    if (live.invalid) onSessionInvalid(live.invalid);
   }, [live.invalid, onSessionInvalid]);
+
+  const selfieReset = state?.status === "onboarding";
+  useEffect(() => {
+    if (selfieReset) onSelfieReset();
+  }, [selfieReset, onSelfieReset]);
 
   const status = state?.clock.status ?? event.status;
   const offline = state && !live.connected && (

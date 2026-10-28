@@ -1,5 +1,8 @@
 import type { EventLive, ParticipantLive } from "./live.ts";
 
+/** Warum eine Sitzung endet: unbekannt (abgelaufen, ausgestiegen) oder von der Moderation entfernt. */
+export type SessionEndReason = "unknown" | "removed";
+
 export interface ServerHello {
   /** Serverzeit in ms seit Epoch, zur Berechnung des Uhren-Offsets. */
   serverNow: number;
@@ -18,8 +21,8 @@ export interface ServerToClientEvents {
   state: (payload: ParticipantLive) => void;
   /** Zustand für Leinwand und Admins. */
   event_state: (payload: EventLive) => void;
-  /** Die Sitzung ist ungültig (z. B. ausgestiegen oder entfernt). */
-  session_invalid: () => void;
+  /** Die Sitzung ist ungültig (z. B. ausgestiegen oder von der Moderation entfernt). */
+  session_invalid: (payload?: { reason: SessionEndReason }) => void;
 }
 
 export interface ClientToServerEvents {

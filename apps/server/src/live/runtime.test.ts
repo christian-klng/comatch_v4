@@ -230,7 +230,7 @@ describe("Austritt", () => {
       headers: { authorization: `Bearer ${leaver.token}` },
     });
     expect(res.statusCode).toBe(204);
-    expect(t.emits.invalidated).toContain(leaver.id);
+    expect(t.emits.invalidated).toContainEqual({ id: leaver.id, reason: "unknown" });
     expect(await statusOf(partnerId)).toBe("pool");
     expect(t.emits.lastFor(partnerId)).toMatchObject({ status: "pool", match: null });
 

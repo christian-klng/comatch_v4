@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import {
   normalizeComplements,
   type EventCreateInput,
@@ -15,7 +15,7 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type EventRow = typeof event.$inferSelect;
 
 function participantCount(db: Db | Tx, eventId: string): Promise<number> {
-  return db.$count(participant, eq(participant.eventId, eventId));
+  return db.$count(participant, and(eq(participant.eventId, eventId), ne(participant.status, "removed")));
 }
 
 function toSummary(
@@ -42,7 +42,10 @@ export async function listEvents(db: Db): Promise<EventSummary[]> {
       status: event.status,
       startsAt: event.startsAt,
       createdAt: event.createdAt,
-      participantCount: db.$count(participant, eq(participant.eventId, event.id)),
+      participantCount: db.$count(
+        participant,
+        and(eq(participant.eventId, event.id), ne(participant.status, "removed")),
+      ),
     })
     .from(event)
     .orderBy(desc(event.createdAt));

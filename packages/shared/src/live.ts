@@ -32,7 +32,9 @@ export interface ConfirmCodeResult {
 }
 
 /** Steuerung eines Events durch Admins. */
-export const EVENT_CONTROL_ACTIONS = ["start", "pause", "resume", "next_round", "end"] as const;
+export const EVENT_CONTROL_ACTIONS = ["start", "pause", "resume", "next_round", "extend", "end"] as const;
+/** „Runde verlängern“ gibt so viel Zeit dazu. */
+export const EXTEND_ROUND_MS = 60_000;
 export type EventControlAction = (typeof EVENT_CONTROL_ACTIONS)[number];
 export const eventControlInput = z.object({ action: z.enum(EVENT_CONTROL_ACTIONS) });
 

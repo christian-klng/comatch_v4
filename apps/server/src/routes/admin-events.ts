@@ -12,19 +12,22 @@ import {
 } from "@comatch/shared";
 import type { AppContext } from "../context.ts";
 import { event, participant } from "../db/schema.ts";
+import { eventStats, listParticipants, matchesCsv, participantsCsv } from "../events/report.ts";
 import { createEvent, getEventDetail, listEvents, replaceQuestions } from "../events/service.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
 import { detectImageType } from "../lib/images.ts";
 import { randomToken } from "../lib/tokens.ts";
+import { selfiePrefix } from "../participants/service.ts";
 
 const idParams = z.object({ id: z.uuid() });
+const participantParams = z.object({ id: z.uuid(), participantId: z.uuid() });
 /** Vorerst nur Entwurf ↔ Offen; Start, Pause und Ende kommen mit der Live-Steuerung. */
 const statusInput = z.object({ status: z.enum(["draft", "open"]) });
 
 /** Event-Verwaltung. Läuft im geschützten /admin-Bereich. */
 export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   app,
-  { db, storage, live, publicBaseUrl },
+  { db, storage, media, live, publicBaseUrl },
 ) => {
   // Logos kommen als rohe Bilddaten (kein Multipart), begrenzt auf LOGO_MAX_BYTES.
   app.addContentTypeParser(
@@ -98,7 +101,50 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
     return detail(id);
   });
 
-  /** Live-Steuerung: Start, Pause, Fortsetzen, nächste Runde, Ende. */
+  // -------------------------------------------------------------------------
+  // Teilnehmende, Statistik und Export
+  // -------------------------------------------------------------------------
+
+  app.get("/events/:id/participants", async (request) => {
+    const { id } = idParams.parse(request.params);
+    await requireEvent(id);
+    return listParticipants(db, media, id, (p) => live.isPresent(p));
+  });
+
+  /** Eingriff bei unpassendem Selfie: zurücksetzen (neu fotografieren) oder Person entfernen. */
+  const moderate = (action: "reset_selfie" | "remove") => async (request: { params: unknown }) => {
+    const { id, participantId } = participantParams.parse(request.params);
+    await requireEvent(id);
+    const { selfieKey } = await live.moderate(id, participantId, action);
+    if (selfieKey) await storage.deletePrefix(selfiePrefix(id, participantId));
+    return listParticipants(db, media, id, (p) => live.isPresent(p));
+  };
+  app.post("/events/:id/participants/:participantId/reset-selfie", moderate("reset_selfie"));
+  app.delete("/events/:id/participants/:participantId", moderate("remove"));
+
+  app.get("/events/:id/stats", async (request) => {
+    const { id } = idParams.parse(request.params);
+    await requireEvent(id);
+    return eventStats(db, id);
+  });
+
+  const exports = { matches: matchesCsv, participants: participantsCsv };
+  app.get("/events/:id/export/:kind", async (request, reply) => {
+    const { id, kind } = idParams
+      .extend({ kind: z.enum(["matches.csv", "participants.csv"]) })
+      .parse(request.params);
+    const row = await db.query.event.findFirst({ where: eq(event.id, id), columns: { slug: true } });
+    if (!row) throw notFound("event_not_found");
+    const name = kind.replace(".csv", "") as keyof typeof exports;
+    const filename = `comatch-${row.slug}-${name === "matches" ? "matches" : "teilnehmende"}.csv`;
+    return reply
+      .header("content-type", "text/csv; charset=utf-8")
+      .header("content-disposition", `attachment; filename="${filename}"`)
+      .header("cache-control", "no-store")
+      .send(await exports[name](db, id));
+  });
+
+  /** Live-Steuerung: Start, Pause, Fortsetzen, nächste Runde, Verlängern, Ende. */
   app.post("/events/:id/control", async (request) => {
     const { id } = idParams.parse(request.params);
     const { action } = eventControlInput.parse(request.body);

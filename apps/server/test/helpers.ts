@@ -108,11 +108,11 @@ export function useTestApp() {
 function recordingEmitter() {
   const participantStates = new Map<string, ParticipantLive[]>();
   const eventStates = new Map<string, EventLive[]>();
-  const invalidated: string[] = [];
+  const invalidated: { id: string; reason: string }[] = [];
   const emitter: Emitter = {
     toParticipant: (id, state) => participantStates.set(id, [...(participantStates.get(id) ?? []), state]),
     toEvent: (id, state) => eventStates.set(id, [...(eventStates.get(id) ?? []), state]),
-    invalidate: (id) => invalidated.push(id),
+    invalidate: (id, reason) => invalidated.push({ id, reason }),
   };
   return {
     ...emitter,

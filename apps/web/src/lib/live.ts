@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { estimateClockOffset, remainingMs, type SocketAuth } from "@comatch/shared";
+import { estimateClockOffset, remainingMs, type SessionEndReason, type SocketAuth } from "@comatch/shared";
 import { connectSocket } from "./socket.ts";
 
 const RESYNC_MS = 15_000;
@@ -9,8 +9,8 @@ interface LiveConnection<T> {
   connected: boolean;
   /** Serverzeit − Clientzeit in ms. */
   offsetMs: number;
-  /** Der Server hat die Sitzung abgelehnt (z. B. ausgestiegen). */
-  invalid: boolean;
+  /** Der Server hat die Sitzung abgelehnt (z. B. ausgestiegen oder entfernt), sonst null. */
+  invalid: SessionEndReason | null;
 }
 
 /**
@@ -22,7 +22,7 @@ export function useLive<T>(auth: SocketAuth | null, eventName: "state" | "event_
     data: null,
     connected: false,
     offsetMs: 0,
-    invalid: false,
+    invalid: null,
   });
   const key = JSON.stringify(auth);
 
@@ -49,9 +49,9 @@ export function useLive<T>(auth: SocketAuth | null, eventName: "state" | "event_
       if (reason === "io server disconnect" && !invalid) retry = setTimeout(() => socket.connect(), 2_000);
     });
     socket.on(eventName, (data: unknown) => setState((s) => ({ ...s, data: data as T })));
-    socket.on("session_invalid", () => {
+    socket.on("session_invalid", (payload) => {
       invalid = true;
-      setState((s) => ({ ...s, invalid: true }));
+      setState((s) => ({ ...s, invalid: payload?.reason ?? "unknown" }));
     });
     const interval = setInterval(sync, RESYNC_MS);
 

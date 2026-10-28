@@ -2,7 +2,7 @@
 
 Live-Matchmaking für Gründer*innen auf Präsenzveranstaltungen. Gesamtplan und Entscheidungen: [PLAN.md](PLAN.md).
 
-**Stand:** M6 fertig. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3), die Runden laufen automatisch und live per Socket.IO (M4), der Spielablauf am Handy mit Codes, Ködern und „Nicht gefunden“ ist komplett (M5). Jetzt gibt es die Leinwand für den Beamer: Lobby mit QR-Code und Gesichtern, großer Countdown, Match-Animationen mit Warteschlange, Rundenwechsel und Abschlussfolie mit Collage (M6). Als Nächstes: erweiterte Live-Steuerung, Statistik und CSV (M7).
+**Stand:** M7 fertig. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3), die Runden laufen live per Socket.IO (M4), der Spielablauf am Handy ist komplett (M5) und die Leinwand läuft auf dem Beamer (M6). Jetzt hat die Moderation volle Kontrolle: Runde um eine Minute verlängern, Teilnehmende mit Selfie und Status sehen, Selfie zurücksetzen oder Personen entfernen, Statistik und CSV-Export (M7). Als Nächstes: Härtung und Lasttest (M8).
 
 ## Voraussetzungen
 
@@ -87,6 +87,11 @@ packages/
   - Der Zustand enthält zusätzlich die Summen über alle Runden, die bestätigten Matches der laufenden Runde mit Selfies (höchstens 30) und Selfies für Lobby (die 24 neuesten) und Abschluss (alle). Während der Runden gehen keine Selfie-Listen mit.
   - Animationen: Die Leinwand spielt jedes Match ab, dessen ID sie noch nicht kennt („Snapshot statt Delta“, kein eigenes Ereignis). Beim Öffnen oder Neuladen wird nichts nachgespielt. Bei vielen Bestätigungen kommen bis zu drei Matches gleichzeitig auf die Bühne. Konfetti per `canvas-confetti`; mit „Bewegung reduzieren“ nur Ein- und Ausblenden.
   - Größen in `vh`/`vw`, damit die Ansicht auf jedem Beamer gleich aussieht; Countdown in den letzten 10 s betont. Die Abschlusscollage berechnet die Kachelgröße so, dass alle Selfies ohne Scrollen passen.
+- **Moderation** (`apps/server/src/events/report.ts`, Tabs „Teilnehmende“ und „Statistik“):
+  - „+1 Minute“ verlängert die laufende Runde (auch in der Pause).
+  - Teilnehmende sind anonym und nach Beitritt nummeriert (T001 …). „Selfie zurücksetzen“ löscht das Foto, das Handy springt zum Selfie-Schritt mit Hinweis. „Entfernen“ löscht das Foto und beendet die Sitzung („Die Moderation hat dich aus dem Event entfernt“); die Person bleibt mit Status `removed` und ihren Antworten in der Datenbank, damit Statistik und Nummern stimmen. In beiden Fällen lösen sich offene Matches auf, das Gegenüber kommt sofort in den Pool.
+  - Statistik: bestätigte Matches, Bestätigungsquote (bestätigt ÷ abgeschlossen, ohne noch offene), Matches pro Person (Ø, Median, Verteilung), je Runde und für Nachzügler.
+  - CSV-Export (Matches, Teilnehmende) mit Semikolon und BOM für Excel, Zeiten in Europe/Berlin, ohne Fotos. Werte, die mit `=`, `+`, `-` oder `@` beginnen, werden entschärft.
 - **Bestätigung** (`apps/server/src/live/codes.ts`, `confirm.ts`):
   - Codes sind dreistellige Zahlen mit verschiedenen Ziffern ohne führende Null. Emoji + Wort (Plan, offene Frage) ist bewusst noch nicht gebaut; das Format steckt nur in `codes.ts`.
   - Zur Auswahl stehen der richtige Code und zwei Köder: einer mit vertauschten Ziffern, einer mit einer anderen Ziffer. Köder sind gespeichert und die Reihenfolge ist stabil, damit Neuladen nichts verrät; nach jeder falschen Wahl wird neu gemischt.

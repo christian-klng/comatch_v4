@@ -13,7 +13,7 @@ function Stat({ value, label, muted }: { value: number; label: string; muted?: b
 }
 
 /**
- * Status und Steuerung eines Events: Beitritt öffnen, Start, Pause, nächste Runde, Ende.
+ * Status und Steuerung eines Events: Beitritt öffnen, Start, Pause, nächste Runde, Verlängern, Ende.
  * Zahlen und Countdown kommen live per Socket.IO.
  */
 export function EventControls({
@@ -72,6 +72,7 @@ export function EventControls({
     paused: `Runde ${clock?.round ?? "–"} pausiert · ${formatCountdown(clock?.pausedRemainingMs ?? null)} übrig`,
     ended: "Event beendet",
   }[status];
+  const totals = live.data?.totals;
 
   return (
     <Card className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -82,7 +83,14 @@ export function EventControls({
           )}
           {headline}
         </p>
-        {status !== "draft" && (
+        {status === "ended" && totals && (
+          <p className="text-sm text-slate-600">
+            <span className="font-semibold text-slate-900 tabular-nums">{totals.confirmedMatches}</span>{" "}
+            bestätigte Matches in{" "}
+            <span className="font-semibold text-slate-900 tabular-nums">{totals.rounds}</span> Runden
+          </p>
+        )}
+        {status !== "draft" && status !== "ended" && (
           <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {counts ? (
               <>
@@ -151,6 +159,16 @@ export function EventControls({
             {status === "paused" && (
               <Button busy={busy === "resume"} onClick={() => void control("resume")}>
                 Fortsetzen
+              </Button>
+            )}
+            {(status === "running" || status === "paused") && (
+              <Button
+                variant="secondary"
+                busy={busy === "extend"}
+                title="Gibt der laufenden Runde eine Minute dazu."
+                onClick={() => void control("extend")}
+              >
+                +1 Minute
               </Button>
             )}
             {(status === "open" || status === "running" || status === "paused") && (

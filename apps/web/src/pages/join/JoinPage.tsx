@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import type { JoinResult, ParticipantMe, PublicEvent } from "@comatch/shared";
+import type { JoinResult, ParticipantMe, PublicEvent, SessionEndReason } from "@comatch/shared";
 import { Spinner, cx } from "../../components/ui.tsx";
 import { ApiError, api, errorMessage } from "../../lib/api.ts";
 import { loadDraftAnswers, loadToken, saveDraftAnswers, saveToken } from "../../lib/participantSession.ts";
@@ -24,15 +24,17 @@ async function fetchSession(slug: string) {
   const event = await api<PublicEvent>(`/events/${slug}`);
   const stored = loadToken(slug);
   let me: ParticipantMe | null = null;
+  let notice: string | null = null;
   if (stored) {
     try {
       me = await api<ParticipantMe>("/participant", { token: stored });
     } catch (err) {
       if (!(err instanceof ApiError && err.status === 401)) throw err;
       saveToken(slug, null);
+      if (err.code === "participant_removed") notice = err.message;
     }
   }
-  return { event, token: me ? stored : null, me };
+  return { event, token: me ? stored : null, me, notice };
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +184,7 @@ export function JoinPage() {
         setEvent(session.event);
         setToken(session.token);
         setMe(session.me);
+        if (session.notice) setNotice(session.notice);
         const next: Phase = !session.me
           ? { name: "welcome" }
           : session.me.status === "onboarding"
@@ -240,6 +243,7 @@ export function JoinPage() {
         setMe(result.participant);
       }
       setMe(await api<ParticipantMe>("/participant/selfie", { method: "PUT", body: photo, token: current }));
+      setNotice(null);
       setPhase({ name: "ready" });
     } catch (err) {
       if (err instanceof ApiError && err.code === "questions_changed") {
@@ -260,11 +264,26 @@ export function JoinPage() {
   };
 
   // Sitzung vom Server abgelehnt (z. B. in einem anderen Tab ausgestiegen oder entfernt).
-  const sessionInvalid = useCallback(() => {
-    resetSession();
-    setNotice("Deine Sitzung ist abgelaufen. Du kannst neu beitreten.");
-    setPhase({ name: "welcome" });
-  }, [resetSession]);
+  const sessionInvalid = useCallback(
+    (reason: SessionEndReason) => {
+      resetSession();
+      setNotice(
+        reason === "removed"
+          ? "Die Moderation hat dich aus dem Event entfernt."
+          : "Deine Sitzung ist abgelaufen. Du kannst neu beitreten.",
+      );
+      setPhase({ name: "welcome" });
+    },
+    [resetSession],
+  );
+
+  const selfieReset = useCallback(() => {
+    setNotice(
+      "Die Moderation bittet dich um ein neues Selfie. Achte darauf, dass dein Gesicht gut zu sehen ist.",
+    );
+    setMe((current) => (current ? { ...current, status: "onboarding", selfieUrl: null } : current));
+    setPhase({ name: "selfie" });
+  }, []);
 
   const leave = async () => {
     await api("/participant", { method: "DELETE", token: token! });
@@ -358,6 +377,7 @@ export function JoinPage() {
           }}
           onLeave={leave}
           onSessionInvalid={sessionInvalid}
+          onSelfieReset={selfieReset}
         />
       )}
 

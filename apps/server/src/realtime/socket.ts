@@ -1,7 +1,12 @@
 import type { Server as HttpServer } from "node:http";
 import { eq } from "drizzle-orm";
 import { Server, type Socket } from "socket.io";
-import type { ClientToServerEvents, ServerToClientEvents, SocketAuth } from "@comatch/shared";
+import type {
+  ClientToServerEvents,
+  ServerToClientEvents,
+  SessionEndReason,
+  SocketAuth,
+} from "@comatch/shared";
 import { SESSION_COOKIE, findAdminBySession } from "../auth/session.ts";
 import type { Db } from "../db/client.ts";
 import { event, participant } from "../db/schema.ts";
@@ -30,13 +35,13 @@ export function socketEmitter(io: RealtimeServer): Emitter {
     toParticipant: (id, state) => io.to(rooms.participant(id)).emit("state", state),
     toEvent: (eventId, state) =>
       io.to([rooms.presenter(eventId), rooms.admin(eventId)]).emit("event_state", state),
-    invalidate: (id) => io.to(rooms.participant(id)).emit("session_invalid"),
+    invalidate: (id, reason) => io.to(rooms.participant(id)).emit("session_invalid", { reason }),
   };
 }
 
 /** Anmeldung abgelehnt: Der Client erfährt es und versucht es nicht erneut. */
-function reject(socket: AppSocket) {
-  socket.emit("session_invalid");
+function reject(socket: AppSocket, reason: SessionEndReason = "unknown") {
+  socket.emit("session_invalid", { reason });
   socket.disconnect(true);
 }
 
@@ -49,7 +54,8 @@ async function handleConnection(socket: AppSocket, db: Db, live: LiveEvents) {
       where: eq(participant.sessionTokenHash, sha256(String(auth.token))),
       columns: { id: true, eventId: true, status: true },
     });
-    if (!row || row.status === "removed") return reject(socket);
+    if (!row) return reject(socket);
+    if (row.status === "removed") return reject(socket, "removed");
     // Schon wieder weg, während wir in der DB nachgesehen haben: nicht als verbunden zählen.
     if (socket.disconnected) return;
     socket.on("disconnect", () => void live.disconnect(row.id, row.eventId));

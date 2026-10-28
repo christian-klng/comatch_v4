@@ -28,6 +28,8 @@ import { api, ApiError, errorMessage } from "../../lib/api.ts";
 import { fromLocalInput, toLocalInput } from "../../lib/format.ts";
 import { useClipboard } from "../../lib/useClipboard.ts";
 import { EventControls } from "./EventControls.tsx";
+import { ParticipantsTab } from "./ParticipantsTab.tsx";
+import { StatsTab } from "./StatsTab.tsx";
 
 const DEFAULT_BRAND = "#6366f1";
 const ROUND_MINUTES = [2, 3, 4, 5, 6, 7, 8, 10, 12, 15].filter(
@@ -560,6 +562,8 @@ const TABS = [
   { id: "questions", label: "Fragen", Component: QuestionsTab },
   { id: "branding", label: "Branding", Component: BrandingTab },
   { id: "links", label: "QR-Code & Links", Component: LinksTab },
+  { id: "participants", label: "Teilnehmende", Component: ParticipantsTab },
+  { id: "stats", label: "Statistik", Component: StatsTab },
 ] as const;
 
 export function EventEditPage() {
