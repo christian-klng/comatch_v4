@@ -1,4 +1,12 @@
 import { z } from "zod";
+import type { LegalInfo } from "@comatch/shared";
+
+/** Leere Werte (z. B. `LEGAL_PHONE=` aus Docker Compose) gelten als nicht gesetzt. */
+const optionalText = <T extends z.ZodType>(schema: T) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    schema.optional(),
+  );
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -19,9 +27,35 @@ const envSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().min(1),
   /** Schlüssel für signierte Bild-URLs. Ohne Angabe zufällig je Serverstart (alte URLs verfallen dann). */
   MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
+
+  /** Stunden nach Eventende, nach denen Selfies und Sitzungen automatisch gelöscht werden. */
+  RETENTION_HOURS: z.coerce.number().positive().default(24),
+  /** Nur hinter einem Reverse-Proxy (Caddy) einschalten: Dann gilt X-Forwarded-For als Client-IP. */
+  TRUST_PROXY: z.stringbool().default(false),
+
+  /** Angaben für Impressum und Datenschutzerklärung (Pflicht im Produktivbetrieb). */
+  LEGAL_NAME: optionalText(z.string()),
+  LEGAL_ADDRESS: optionalText(z.string()),
+  LEGAL_EMAIL: optionalText(z.email()),
+  LEGAL_PHONE: optionalText(z.string()),
+  /** Optional: Datenschutzbeauftragte*r (Name und Kontakt). */
+  LEGAL_DPO: optionalText(z.string()),
 });
 
 export type Config = z.infer<typeof envSchema> & { COOKIE_SECURE: boolean };
+
+/** Angaben für Impressum und Datenschutzerklärung, wie sie das Frontend bekommt. */
+export function legalInfo(config: Config): LegalInfo {
+  return {
+    configured: Boolean(config.LEGAL_NAME && config.LEGAL_ADDRESS && config.LEGAL_EMAIL),
+    name: config.LEGAL_NAME ?? null,
+    address: config.LEGAL_ADDRESS ?? null,
+    email: config.LEGAL_EMAIL ?? null,
+    phone: config.LEGAL_PHONE ?? null,
+    dpo: config.LEGAL_DPO ?? null,
+    retentionHours: config.RETENTION_HOURS,
+  };
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const result = envSchema.safeParse(env);

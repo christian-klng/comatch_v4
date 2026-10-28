@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../app.ts";
-import { useTestApp } from "../../test/helpers.ts";
+import { RETENTION_MS, TEST_LEGAL, useTestApp } from "../../test/helpers.ts";
 
 const t = useTestApp();
 
@@ -18,6 +18,8 @@ describe("GET /api/health", () => {
       media: t.media,
       live: t.live,
       publicBaseUrl: "http://x",
+      retentionMs: RETENTION_MS,
+      legal: TEST_LEGAL,
       cookieSecure: false,
       pingDb: async () => {
         throw new Error("down");

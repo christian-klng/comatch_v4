@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router";
 import { Button, cx } from "../../components/ui.tsx";
+import { LegalLinks } from "../../components/LegalLinks.tsx";
 import { useAuth } from "../../lib/auth.tsx";
 
 export function Logo({ className }: { className?: string }) {
@@ -42,6 +43,7 @@ export function AdminLayout() {
       <main className="mx-auto max-w-5xl px-4 py-8">
         <Outlet />
       </main>
+      <LegalLinks className="mx-auto max-w-5xl px-4 pb-8 text-xs text-slate-400" />
     </div>
   );
 }

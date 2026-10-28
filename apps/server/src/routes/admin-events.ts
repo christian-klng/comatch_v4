@@ -13,6 +13,7 @@ import {
 import type { AppContext } from "../context.ts";
 import { event, participant } from "../db/schema.ts";
 import { eventStats, listParticipants, matchesCsv, participantsCsv } from "../events/report.ts";
+import { purgeEvent } from "../events/retention.ts";
 import { createEvent, getEventDetail, listEvents, replaceQuestions } from "../events/service.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
 import { detectImageType } from "../lib/images.ts";
@@ -27,7 +28,7 @@ const statusInput = z.object({ status: z.enum(["draft", "open"]) });
 /** Event-Verwaltung. Läuft im geschützten /admin-Bereich. */
 export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   app,
-  { db, storage, media, live, publicBaseUrl },
+  { db, storage, media, live, publicBaseUrl, retentionMs },
 ) => {
   // Logos kommen als rohe Bilddaten (kein Multipart), begrenzt auf LOGO_MAX_BYTES.
   app.addContentTypeParser(
@@ -36,7 +37,7 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
     (_request, body, done) => done(null, body),
   );
 
-  const detail = (id: string) => getEventDetail(db, id, publicBaseUrl);
+  const detail = (id: string) => getEventDetail(db, id, publicBaseUrl, retentionMs);
 
   const requireEvent = async (id: string) => {
     const row = await db.query.event.findFirst({
@@ -142,6 +143,17 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
       .header("content-disposition", `attachment; filename="${filename}"`)
       .header("cache-control", "no-store")
       .send(await exports[name](db, id));
+  });
+
+  /** Selfies und Sitzungen sofort löschen statt nach Ablauf der Frist (nur beendete Events). */
+  app.post("/events/:id/purge", async (request) => {
+    const { id } = idParams.parse(request.params);
+    const row = await requireEvent(id);
+    if (row.status !== "ended") {
+      throw new HttpError(409, "event_not_ended", "Fotos lassen sich erst nach dem Ende des Events löschen.");
+    }
+    await purgeEvent(db, storage, id, new Date());
+    return detail(id);
   });
 
   /** Live-Steuerung: Start, Pause, Fortsetzen, nächste Runde, Verlängern, Ende. */

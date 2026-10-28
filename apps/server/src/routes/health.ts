@@ -13,7 +13,8 @@ export const healthRoutes: FastifyPluginAsync<HealthDeps> = async (app, { pingDb
   loop.enable();
   app.addHook("onClose", async () => loop.disable());
 
-  app.get("/health", async (_request, reply) => {
+  // Docker prüft alle paar Sekunden: nur Warnungen loggen, sonst füllt das die Logs.
+  app.get("/health", { logLevel: "warn" }, async (_request, reply) => {
     let db: "ok" | "error" = "ok";
     try {
       await pingDb();

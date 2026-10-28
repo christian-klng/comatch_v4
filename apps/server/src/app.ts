@@ -24,11 +24,13 @@ export interface AppOptions extends AppContext {
   webDistDir?: string;
   /** Überschreibt den DB-Check des Health-Endpunkts (für Tests). */
   pingDb?: () => Promise<void>;
+  /** X-Forwarded-For vertrauen; nur hinter einem Reverse-Proxy einschalten. */
+  trustProxy?: boolean;
 }
 
 export async function buildApp(options: AppOptions) {
-  const { logger, webDistDir, pingDb, ...context } = options;
-  const app = Fastify({ logger: logger ?? false, trustProxy: true });
+  const { logger, webDistDir, pingDb, trustProxy = false, ...context } = options;
+  const app = Fastify({ logger: logger ?? false, trustProxy });
 
   app.decorateRequest("admin", null);
   app.decorateRequest("participant", null);

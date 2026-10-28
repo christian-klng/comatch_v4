@@ -1,7 +1,13 @@
 import { sql as rawSql } from "drizzle-orm";
 import { afterAll, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
-import { DEFAULT_QUESTIONS, type EventLive, type EventStatus, type ParticipantLive } from "@comatch/shared";
+import {
+  DEFAULT_QUESTIONS,
+  type EventLive,
+  type EventStatus,
+  type LegalInfo,
+  type ParticipantLive,
+} from "@comatch/shared";
 import { buildApp } from "../src/app.ts";
 import { createDb } from "../src/db/client.ts";
 import { adminUser, event } from "../src/db/schema.ts";
@@ -14,6 +20,16 @@ import { createMemoryStorage } from "../src/storage/storage.ts";
 import { TEST_DATABASE_URL } from "./db-url.ts";
 
 export const PUBLIC_BASE_URL = "http://comatch.test";
+export const RETENTION_MS = 24 * 60 * 60 * 1000;
+export const TEST_LEGAL: LegalInfo = {
+  configured: true,
+  name: "Test GmbH",
+  address: "Teststraße 1, 12345 Berlin",
+  email: "kontakt@comatch.test",
+  phone: null,
+  dpo: null,
+  retentionHours: 24,
+};
 
 /**
  * Baut eine App gegen die Test-Datenbank und leert vor jedem Test alle Tabellen.
@@ -34,6 +50,8 @@ export function useTestApp() {
     live,
     publicBaseUrl: PUBLIC_BASE_URL,
     cookieSecure: false,
+    retentionMs: RETENTION_MS,
+    legal: TEST_LEGAL,
   });
 
   beforeEach(async () => {

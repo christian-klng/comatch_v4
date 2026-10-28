@@ -4,6 +4,7 @@ import type { JoinResult, ParticipantMe, PublicEvent, SessionEndReason } from "@
 import { Spinner, cx } from "../../components/ui.tsx";
 import { ApiError, api, errorMessage } from "../../lib/api.ts";
 import { loadDraftAnswers, loadToken, saveDraftAnswers, saveToken } from "../../lib/participantSession.ts";
+import { LegalLinks } from "../../components/LegalLinks.tsx";
 import { Message, PrimaryButton, Screen, SecondaryButton } from "./parts.tsx";
 import { LiveView } from "./LiveView.tsx";
 import { SelfieStep } from "./SelfieStep.tsx";
@@ -96,6 +97,7 @@ function Welcome({
       <PrimaryButton className="mt-auto" onClick={onStart}>
         Los geht’s
       </PrimaryButton>
+      <LegalLinks className="-mt-2 text-center text-xs text-slate-500" />
     </>
   );
 }

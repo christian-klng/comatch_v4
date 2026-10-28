@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { EventControlAction, EventDetail, EventLive } from "@comatch/shared";
 import { Button, Card, cx } from "../../components/ui.tsx";
 import { api, errorMessage } from "../../lib/api.ts";
+import { formatDateTime } from "../../lib/format.ts";
 import { formatCountdown, useLive, useRemaining } from "../../lib/live.ts";
 
 function Stat({ value, label, muted }: { value: number; label: string; muted?: boolean }) {
@@ -29,6 +30,7 @@ export function EventControls({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [confirmPurge, setConfirmPurge] = useState(false);
 
   // Status hat sich live geändert (z. B. durch eine andere Person im Team): Details neu laden.
   const liveStatus = clock?.status;
@@ -45,6 +47,7 @@ export function EventControls({
     try {
       onChanged(await request());
       setConfirmEnd(false);
+      setConfirmPurge(false);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -90,6 +93,15 @@ export function EventControls({
             <span className="font-semibold text-slate-900 tabular-nums">{totals.rounds}</span> Runden
           </p>
         )}
+        {status === "ended" && (
+          <p className="text-sm text-slate-600">
+            {event.purgedAt
+              ? `Fotos und Sitzungen gelöscht am ${formatDateTime(event.purgedAt)}.`
+              : event.purgeAt
+                ? `Fotos werden am ${formatDateTime(event.purgeAt)} automatisch gelöscht.`
+                : null}
+          </p>
+        )}
         {status !== "draft" && status !== "ended" && (
           <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {counts ? (
@@ -109,7 +121,27 @@ export function EventControls({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {confirmEnd ? (
+        {confirmPurge ? (
+          <>
+            <span className="self-center text-sm text-slate-600">
+              Alle Selfies löschen? Das lässt sich nicht rückgängig machen.
+            </span>
+            <Button
+              variant="danger"
+              busy={busy === "purge"}
+              onClick={() =>
+                void act("purge", () =>
+                  api<EventDetail>(`/admin/events/${event.id}/purge`, { method: "POST" }),
+                )
+              }
+            >
+              Ja, löschen
+            </Button>
+            <Button variant="secondary" onClick={() => setConfirmPurge(false)}>
+              Abbrechen
+            </Button>
+          </>
+        ) : confirmEnd ? (
           <>
             <span className="self-center text-sm text-slate-600">Event wirklich beenden?</span>
             <Button variant="danger" busy={busy === "end"} onClick={() => void control("end")}>
@@ -169,6 +201,11 @@ export function EventControls({
                 onClick={() => void control("extend")}
               >
                 +1 Minute
+              </Button>
+            )}
+            {status === "ended" && !event.purgedAt && !confirmPurge && (
+              <Button variant="danger" onClick={() => setConfirmPurge(true)}>
+                Fotos jetzt löschen
               </Button>
             )}
             {(status === "open" || status === "running" || status === "paused") && (

@@ -59,6 +59,11 @@ export interface EventDetail extends EventSummary {
   presenterUrl: string;
   /** Fragen sind gesperrt, sobald jemand beigetreten ist (sonst passen Antworten nicht mehr). */
   questionsLocked: boolean;
+  endedAt: string | null;
+  /** Wann Selfies und Sitzungen automatisch gelöscht werden (nur bei beendeten Events). */
+  purgeAt: string | null;
+  /** Wann sie gelöscht wurden; danach gibt es keine Fotos mehr. */
+  purgedAt: string | null;
   questions: QuestionInput[];
 }
 
@@ -99,4 +104,17 @@ export interface EventStats {
   };
   byRound: { round: number; matches: number; confirmed: number; confirmationRate: number | null }[];
   byKind: Record<MatchGroupKind, { matches: number; confirmed: number }>;
+}
+
+/** Öffentliche Angaben für Impressum und Datenschutzerklärung (aus der Server-Konfiguration). */
+export interface LegalInfo {
+  /** false, solange die Angaben im Betrieb noch fehlen. */
+  configured: boolean;
+  name: string | null;
+  address: string | null;
+  email: string | null;
+  phone: string | null;
+  dpo: string | null;
+  /** Löschfrist nach Eventende in Stunden. */
+  retentionHours: number;
 }

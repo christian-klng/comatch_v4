@@ -1,0 +1,105 @@
+# Produktivbetrieb auf einem Server (z. B. Hetzner Cloud), siehe deploy/DEPLOY.md.
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+# Caddy terminiert HTTPS, die App ist nur intern erreichbar. Selfies liegen im Hetzner
+# Object Storage (S3_* in deploy/.env), die Datenbank in Postgres mit täglicher Sicherung.
+
+# Logs begrenzen: werden fortlaufend überschrieben (so in der Datenschutzerklärung zugesagt).
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN fehlt in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    logging: *logging
+
+  app:
+    build:
+      context: ..
+    restart: unless-stopped
+    # Zeit für das saubere Herunterfahren (laufende DB-Arbeit abwarten).
+    stop_grace_period: 15s
+    environment:
+      DATABASE_URL: postgres://comatch:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}@postgres:5432/comatch
+      PUBLIC_BASE_URL: https://${DOMAIN}
+      # Hinter Caddy: X-Forwarded-For ist vertrauenswürdig (für Rate-Limits je IP).
+      TRUST_PROXY: "true"
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT fehlt}
+      S3_REGION: ${S3_REGION:-fsn1}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET fehlt}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID fehlt}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY fehlt}
+      # Fest, damit Bild-Links einen Neustart überstehen.
+      MEDIA_SIGNING_SECRET: ${MEDIA_SIGNING_SECRET:?MEDIA_SIGNING_SECRET fehlt}
+      RETENTION_HOURS: ${RETENTION_HOURS:-24}
+      LEGAL_NAME: ${LEGAL_NAME:-}
+      LEGAL_ADDRESS: ${LEGAL_ADDRESS:-}
+      LEGAL_EMAIL: ${LEGAL_EMAIL:-}
+      LEGAL_PHONE: ${LEGAL_PHONE:-}
+      LEGAL_DPO: ${LEGAL_DPO:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: comatch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: comatch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comatch -d comatch"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  # Tägliche Sicherung der Datenbank, 7 Tage Aufbewahrung (deploy/backup.sh).
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: comatch
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: comatch
+    volumes:
+      - ./backup.sh:/usr/local/bin/backup.sh:ro
+      - backups:/backups
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  pgdata:
+  backups:
+  caddy_data:
+  caddy_config:

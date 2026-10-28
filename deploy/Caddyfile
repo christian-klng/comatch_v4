@@ -1,0 +1,25 @@
+# Reverse-Proxy vor der App: HTTPS mit automatischem Let's-Encrypt-Zertifikat, WebSockets für
+# Socket.IO laufen ohne Zusatzkonfiguration mit. DOMAIN kommt aus deploy/.env.
+{
+	# Keine Zugriffsprotokolle mit IP-Adressen (Datenschutz); Fehler landen weiter im Log.
+	log {
+		level ERROR
+	}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		# Kamera nur für die eigene Seite (Selfie), sonst nichts.
+		Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+		# Alles kommt vom eigenen Server; Inline-Styles braucht React für dynamische Farben und Größen.
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		-Server
+	}
+
+	reverse_proxy app:3000
+}

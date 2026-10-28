@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Spinner, cx } from "../../components/ui.tsx";
+import { useLegal } from "../../lib/legal.ts";
 import { fileToSelfieBlob, toSelfieBlob } from "../../lib/selfie.ts";
 import { PrimaryButton, SecondaryButton } from "./parts.tsx";
 
@@ -81,6 +82,7 @@ export function SelfieStep({
   const camera = useFrontCamera(videoRef);
   const [photo, setPhoto] = usePhoto();
   const [consent, setConsent] = useState(!needsConsent);
+  const legal = useLegal();
   const [captureError, setCaptureError] = useState<string | null>(null);
 
   const capture = async () => {
@@ -181,9 +183,18 @@ export function SelfieStep({
                   className="mt-0.5 size-5 shrink-0 accent-brand"
                 />
                 <span>
-                  Ich bin einverstanden, dass mein Foto für dieses Event gespeichert und meinen Matches sowie
-                  auf der Leinwand gezeigt wird. Es wird nach dem Event gelöscht. Ich kann jederzeit
-                  aussteigen, dann wird es sofort gelöscht.
+                  Ich bin einverstanden, dass mein Foto und meine Antworten für dieses Event gespeichert und
+                  mein Foto meinen Matches sowie auf der Leinwand gezeigt wird. Das Foto wird spätestens{" "}
+                  {legal?.retentionHours ?? 24} Stunden nach dem Event gelöscht. Ich kann jederzeit
+                  aussteigen, dann wird alles sofort gelöscht.{" "}
+                  <a
+                    href="/datenschutz"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-slate-100 underline"
+                  >
+                    Datenschutzerklärung
+                  </a>
                 </span>
               </label>
             )}

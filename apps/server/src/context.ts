@@ -1,3 +1,4 @@
+import type { LegalInfo } from "@comatch/shared";
 import type { Db } from "./db/client.ts";
 import type { MediaSigner } from "./lib/media.ts";
 import type { LiveEvents } from "./live/runtime.ts";
@@ -11,4 +12,7 @@ export interface AppContext {
   live: LiveEvents;
   publicBaseUrl: string;
   cookieSecure: boolean;
+  /** Löschfrist nach Eventende. */
+  retentionMs: number;
+  legal: LegalInfo;
 }

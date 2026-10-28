@@ -105,6 +105,8 @@ export const event = pgTable("event", {
   createdBy: uuid().references(() => adminUser.id, { onDelete: "set null" }),
   createdAt: createdAt(),
   endedAt: timestamp({ withTimezone: true }),
+  /** Selfies und Sitzungen gelöscht (automatisch nach Ablauf der Frist oder per Admin). */
+  purgedAt: timestamp({ withTimezone: true }),
 });
 
 export const question = pgTable(

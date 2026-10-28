@@ -291,6 +291,6 @@ pair_history    (event_id, participant_a, participant_b, times_met)
 
 ### Noch offen (klärt sich in der Umsetzung)
 
-- Format der Bestätigungscodes: Zahl oder Emoji + Wort (Entscheidung nach einem kurzen Test mit echten Personen im Raum).
-- Konkrete Texte für Einwilligung und Datenschutzerklärung (mit Datenschutzberatung abstimmen).
-- Aufbewahrungsdauer der Selfies nach Eventende (Vorschlag: 24 h).
+- Format der Bestätigungscodes: Zahl oder Emoji + Wort (Entscheidung nach einem kurzen Test mit echten Personen im Raum). _Umgesetzt: dreistellige Zahlen; Emoji + Wort wäre in `codes.ts` austauschbar._
+- Konkrete Texte für Einwilligung und Datenschutzerklärung (mit Datenschutzberatung abstimmen). _Entwurf umgesetzt (`/datenschutz`), Prüfung durch die Beratung steht aus._
+- Aufbewahrungsdauer der Selfies nach Eventende (Vorschlag: 24 h). _Umgesetzt: 24 h, per `RETENTION_HOURS` einstellbar._

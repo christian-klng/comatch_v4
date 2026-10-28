@@ -101,7 +101,12 @@ export async function loadQuestions(db: Db | Tx, eventId: string): Promise<Quest
   });
 }
 
-export async function getEventDetail(db: Db, eventId: string, publicBaseUrl: string): Promise<EventDetail> {
+export async function getEventDetail(
+  db: Db,
+  eventId: string,
+  publicBaseUrl: string,
+  retentionMs: number,
+): Promise<EventDetail> {
   const row = await db.query.event.findFirst({ where: eq(event.id, eventId) });
   if (!row) throw notFound("event_not_found");
   const [count, questions] = await Promise.all([participantCount(db, row.id), loadQuestions(db, row.id)]);
@@ -116,6 +121,10 @@ export async function getEventDetail(db: Db, eventId: string, publicBaseUrl: str
     presenterUrl: `${publicBaseUrl}/present/${row.id}?token=${row.presenterToken}`,
     questionsLocked: count > 0,
     questions,
+    endedAt: row.endedAt?.toISOString() ?? null,
+    purgeAt:
+      row.endedAt && !row.purgedAt ? new Date(row.endedAt.getTime() + retentionMs).toISOString() : null,
+    purgedAt: row.purgedAt?.toISOString() ?? null,
   };
 }
 

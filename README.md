@@ -2,7 +2,7 @@
 
 Live-Matchmaking für Gründer*innen auf Präsenzveranstaltungen. Gesamtplan und Entscheidungen: [PLAN.md](PLAN.md).
 
-**Stand:** M8 fertig. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3), die Runden laufen live per Socket.IO (M4), der Spielablauf am Handy ist komplett (M5), die Leinwand läuft (M6) und die Moderation hat volle Kontrolle (M7). Jetzt ist alles unter Last getestet: 200 Bots, schwaches WLAN, Server-Neustart und Datenbank-Ausfall (M8, Ergebnisse unten). Als Nächstes: Datenschutz und Launch (M9).
+**Stand:** M9 fertig, alle Meilensteine aus dem Plan sind umgesetzt. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3), die Runden laufen live per Socket.IO (M4), der Spielablauf am Handy ist komplett (M5), die Leinwand läuft (M6), die Moderation hat volle Kontrolle (M7), alles ist unter Last getestet (M8). Mit M9 kommen automatische Löschung, Impressum und Datenschutzerklärung sowie das Produktiv-Setup mit Caddy und täglichen Sicherungen. **Inbetriebnahme:** [deploy/DEPLOY.md](deploy/DEPLOY.md).
 
 ## Voraussetzungen
 
@@ -37,6 +37,7 @@ apps/
   web/      React + Vite + Tailwind (Admin, Präsentation, Teilnehmende)
 packages/
   shared/   gemeinsame Typen, Statuswerte, Zod-Schemas, Zeit-Sync
+deploy/     Produktivbetrieb: Compose mit Caddy, Backups, Anleitung (DEPLOY.md)
 ```
 
 ## Skripte
@@ -51,6 +52,7 @@ packages/
 | `npm run db:generate`                                                                     | Migration aus Änderungen an `schema.ts` erzeugen                                                                                                                                                                                                                                                      |
 | `npm run db:migrate`                                                                      | Migrationen anwenden (passiert auch beim Serverstart)                                                                                                                                                                                                                                                 |
 | `npm run db:seed`                                                                         | Admin-Konto und Demo-Event anlegen (mehrfach ausführbar)                                                                                                                                                                                                                                              |
+| `npm run admin:create -w @comatch/server -- --email <adresse> [--reset]`                  | Admin-Konto anlegen oder Passwort neu setzen (zufällig, wird einmal angezeigt)                                                                                                                                                                                                                        |
 | `npm run db:studio`                                                                       | Drizzle Studio (DB-Browser)                                                                                                                                                                                                                                                                           |
 | `npm run simulate -w @comatch/server -- --people 100 --rounds 8`                          | Matching-Simulation: Übereinstimmung, Wiederholungen, Laufzeit je Runde                                                                                                                                                                                                                               |
 | `npm run bots -w @comatch/server -- --event <code> --count 5 --url http://localhost:5173` | Simulierte Teilnehmende: treten bei, laden ein Selfie hoch, bestätigen ihr Match nach 8–40 s (`--confirm 8-40`); Codes echter Personen raten sie. Mit `--not-found 0.2` drückt ein Teil „Nicht gefunden“                                                                                              |
@@ -102,6 +104,14 @@ packages/
   - „Nicht gefunden“ geht ab Rundenmitte und frühestens 1 min nach Beginn des Matches, nicht mehr nach der eigenen Bestätigung. Ein Paar löst sich auf, in einer Dreiergruppe suchen die anderen beiden weiter. Wer frei wird, kommt sofort in den Pool; bleibt weniger als 1 min, geht es in der nächsten Runde weiter.
   - Code wählen und „Nicht gefunden“ laufen über REST (`POST /api/participant/match/confirm` und `/not-found`) statt über Socket-Nachrichten wie im Plan: So gibt es klare Fehlercodes und das Rate-Limit greift. Die Antwort enthält den neuen Zustand; alle anderen bekommen ihn per Socket.
   - Gemeinsamkeiten berechnet der Server je Paar aus den passenden Fragen. Das Handy sieht nur diese, nicht alle Antworten des Gegenübers.
+
+## Datenschutz und Betrieb (M9)
+
+- **Löschfristen** (`apps/server/src/events/retention.ts`): Selfies und Sitzungen werden `RETENTION_HOURS` (Standard 24) nach Eventende gelöscht; geprüft beim Start und alle 10 Minuten. Antworten und Matches bleiben für die Statistik, ohne Foto und Sitzung sind sie keiner Person mehr zuzuordnen. Events, die eine Woche ohne Aktivität offen stehen, werden automatisch beendet. Admins können die Fotos eines beendeten Events auch sofort löschen.
+- **Impressum und Datenschutzerklärung** unter `/impressum` und `/datenschutz`, Betreiber-Angaben aus `LEGAL_*` (`GET /api/legal`). Der Text der Datenschutzerklärung ist ein Entwurf, der das tatsächliche Verhalten der App beschreibt; vor dem Launch mit der Datenschutzberatung abstimmen. Die Einwilligung beim Selfie nennt die Löschfrist und verlinkt die Erklärung.
+- **Logs** enthalten keine IP-Adressen und keine Query-Strings (dort stünden Presenter-Token und Bild-Signaturen); der Health-Check wird nicht geloggt.
+- **Produktiv-Setup** (`deploy/`): Caddy mit automatischem HTTPS, HSTS und strenger Content-Security-Policy (alles vom eigenen Server; Inline-Styles erlaubt, die React für dynamische Farben braucht). App und Postgres sind nur intern erreichbar; `TRUST_PROXY` ist nur dort an. Logs aller Dienste auf 5 × 10 MB begrenzt. Der Dienst `backup` sichert die Datenbank täglich mit 7 Tagen Aufbewahrung; `deploy/restore.sh` stellt wieder her.
+- Lokal geprüft: kompletter Produktions-Stack mit Caddy, Beitritt mit Selfie, Leinwand mit Match-Animation unter der CSP ohne Konsolenfehler, Admin-Konto per Befehl, Login über HTTPS, Sicherung und Wiederherstellung.
 
 ## Lasttest (M8)
 

@@ -7,7 +7,10 @@ import { notFound } from "../lib/errors.ts";
 import { getParticipantMe, getPublicEvent, joinEvent } from "../participants/service.ts";
 
 /** Öffentliche Event-Endpunkte (ohne Login). */
-export const publicEventRoutes: FastifyPluginAsync<AppContext> = async (app, { db, media }) => {
+export const publicEventRoutes: FastifyPluginAsync<AppContext> = async (app, { db, media, legal }) => {
+  /** Angaben für Impressum und Datenschutzerklärung. */
+  app.get("/legal", async () => legal);
+
   app.get<{ Params: { slug: string } }>("/events/:slug", async (request) =>
     getPublicEvent(db, request.params.slug),
   );
