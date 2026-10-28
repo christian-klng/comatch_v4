@@ -119,6 +119,8 @@ function recordingEmitter() {
     invalidated,
     /** Letzter Zustand, den ein Handy bekommen hat. */
     lastFor: (participantId: string) => participantStates.get(participantId)?.at(-1),
+    /** Wie viele Zustände ein Handy bisher bekommen hat. */
+    countFor: (participantId: string) => participantStates.get(participantId)?.length ?? 0,
     lastEvent: (eventId: string) => eventStates.get(eventId)?.at(-1),
     clear() {
       participantStates.clear();

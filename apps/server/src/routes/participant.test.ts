@@ -177,6 +177,21 @@ describe("/api/participant", () => {
   });
 });
 
+describe("Rate-Limit", () => {
+  it("begrenzt je Person statt je IP, damit ein ganzes Event-WLAN nicht blockiert", async () => {
+    await t.createEvent("open");
+    const a = await joined();
+    const b = await joined();
+    // Alle Anfragen kommen von derselben Adresse; nur die Person mit zu vielen Uploads wird gebremst.
+    for (let i = 0; i < 10; i++) expect((await uploadSelfie(a.auth)).statusCode).toBe(200);
+    const limited = await uploadSelfie(a.auth);
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json()).toMatchObject({ error: "rate_limited" });
+    expect(limited.json().message).toMatch(/^Zu viele Anfragen/);
+    expect((await uploadSelfie(b.auth)).statusCode).toBe(200);
+  });
+});
+
 describe("GET /api/media/*", () => {
   it("verweigert manipulierte oder abgelaufene Links", async () => {
     await t.createEvent("open");

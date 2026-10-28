@@ -58,7 +58,12 @@ async function handleConnection(socket: AppSocket, db: Db, live: LiveEvents) {
     if (row.status === "removed") return reject(socket, "removed");
     // Schon wieder weg, während wir in der DB nachgesehen haben: nicht als verbunden zählen.
     if (socket.disconnected) return;
-    socket.on("disconnect", () => void live.disconnect(row.id, row.eventId));
+    // Darf nie unbehandelt scheitern (z. B. DB kurz weg): sonst beendet Node den ganzen Prozess.
+    socket.on("disconnect", () => {
+      live
+        .disconnect(row.id, row.eventId)
+        .catch((err: unknown) => live.logError(err, "Trennen fehlgeschlagen"));
+    });
     await socket.join(rooms.participant(row.id));
     await live.connect(row.id, row.eventId);
     return;
@@ -97,7 +102,11 @@ export function attachRealtime(httpServer: HttpServer, deps: { db: Db; live: Liv
   io.on("connection", (socket) => {
     socket.emit("hello", { serverNow: Date.now() });
     socket.on("ping", (ack) => ack({ serverNow: Date.now() }));
-    handleConnection(socket, deps.db, deps.live).catch(() => socket.disconnect(true));
+    handleConnection(socket, deps.db, deps.live).catch((err: unknown) => {
+      deps.live.logError(err, "Verbindungsaufbau fehlgeschlagen");
+      // Ohne session_invalid: Der Client versucht es nach kurzer Pause erneut.
+      socket.disconnect(true);
+    });
   });
 
   deps.live.attach(socketEmitter(io));

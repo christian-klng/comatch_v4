@@ -7,7 +7,7 @@ import { sql } from "drizzle-orm";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import { requireAdmin } from "./auth/session.ts";
 import type { AppContext } from "./context.ts";
-import { errorHandler } from "./lib/errors.ts";
+import { errorHandler, HttpError } from "./lib/errors.ts";
 import { adminEventRoutes } from "./routes/admin-events.ts";
 import { adminTeamRoutes } from "./routes/admin-team.ts";
 import { authRoutes } from "./routes/auth.ts";
@@ -34,7 +34,15 @@ export async function buildApp(options: AppOptions) {
   app.decorateRequest("participant", null);
   app.setErrorHandler(errorHandler);
   await app.register(fastifyCookie);
-  await app.register(fastifyRateLimit, { global: false });
+  await app.register(fastifyRateLimit, {
+    global: false,
+    errorResponseBuilder: (_request, context) =>
+      new HttpError(
+        429,
+        "rate_limited",
+        `Zu viele Anfragen. Bitte in ${Math.max(1, Math.ceil(context.ttl / 1000))} s erneut versuchen.`,
+      ),
+  });
 
   await app.register(
     async (api) => {

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { matchGroup } from "../db/schema.ts";
 import { useTestApp } from "../../test/helpers.ts";
 import { liveHelpers } from "../../test/live.ts";
-import { LiveEvents, POOL_TICK_MS } from "./runtime.ts";
+import { LiveEvents, POOL_TICK_MS, ROUND_RETRY_MS } from "./runtime.ts";
 
 const t = useTestApp();
 const { addReady, eventRow, statusOf } = liveHelpers(t);
@@ -237,6 +237,31 @@ describe("Austritt", () => {
     // Beim nächsten Pool-Durchlauf kommt die Person in das andere Match.
     await t.advance(POOL_TICK_MS);
     expect(t.emits.lastFor(partnerId)!.match!.partners).toHaveLength(2);
+  });
+});
+
+describe("Fehler im Betrieb", () => {
+  it("wiederholt einen gescheiterten Rundenwechsel, statt stehen zu bleiben", async () => {
+    const { id } = await t.createEvent("open");
+    await addReady(id, 4);
+    await t.live.control(id, "start");
+
+    // Erster Versuch scheitert (z. B. Datenbank kurz nicht erreichbar).
+    const live = t.live as unknown as { startRound: (eventId: string) => Promise<void> };
+    const original = live.startRound.bind(t.live);
+    let calls = 0;
+    live.startRound = async (eventId) => {
+      if (calls++ === 0) throw new Error("DB weg");
+      return original(eventId);
+    };
+    try {
+      await t.advance(ROUND_MS);
+      expect((await eventRow(id)).currentRound).toBe(1);
+      await t.advance(ROUND_RETRY_MS);
+      expect((await eventRow(id)).currentRound).toBe(2);
+    } finally {
+      delete (live as Partial<typeof live>).startRound;
+    }
   });
 });
 

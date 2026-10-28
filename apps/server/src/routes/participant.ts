@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { confirmCodeInput, IMAGE_MIME_TYPES, matchActionInput, SELFIE_MAX_BYTES } from "@comatch/shared";
 import type { AppContext } from "../context.ts";
 import { participant } from "../db/schema.ts";
@@ -10,6 +10,19 @@ import { getParticipantMe, selfiePrefix } from "../participants/service.ts";
 import { requireParticipant } from "../participants/session.ts";
 
 const EXTENSIONS = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const;
+
+/**
+ * Begrenzung je Person statt je IP: Im Event-WLAN teilen sich oft alle Handys eine öffentliche
+ * Adresse. Läuft nach dem Laden der Person (preHandler).
+ */
+const perParticipant = (max: number) => ({
+  rateLimit: {
+    max,
+    timeWindow: "1 minute",
+    hook: "preHandler" as const,
+    keyGenerator: (request: FastifyRequest) => request.participant?.id ?? request.ip,
+  },
+});
 
 /** Endpunkte für das Handy einer teilnehmenden Person (Bearer-Token). */
 export const participantRoutes: FastifyPluginAsync<AppContext> = async (
@@ -26,7 +39,7 @@ export const participantRoutes: FastifyPluginAsync<AppContext> = async (
   app.get("/", async (request) => getParticipantMe(db, media, request.participant!));
 
   /** Speichert ein (neues) Selfie. Mit dem ersten Selfie ist die Person bereit für Matches. */
-  app.put("/selfie", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (request) => {
+  app.put("/selfie", { config: perParticipant(10) }, async (request) => {
     const me = request.participant!;
     const body = request.body;
     const mime = Buffer.isBuffer(body) && body.length > 0 ? detectImageType(body) : null;
@@ -58,18 +71,14 @@ export const participantRoutes: FastifyPluginAsync<AppContext> = async (
   });
 
   /** Code des Gegenübers gewählt. Falsche Codes sperren kurz; das regelt die Live-Laufzeit. */
-  app.post(
-    "/match/confirm",
-    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
-    async (request) => {
-      const me = request.participant!;
-      const input = confirmCodeInput.parse(request.body);
-      return live.confirmCode(me.eventId, { participantId: me.id, ...input });
-    },
-  );
+  app.post("/match/confirm", { config: perParticipant(30) }, async (request) => {
+    const me = request.participant!;
+    const input = confirmCodeInput.parse(request.body);
+    return live.confirmCode(me.eventId, { participantId: me.id, ...input });
+  });
 
   /** „Nicht gefunden“: neues Match suchen (ab Rundenmitte). */
-  app.post("/match/not-found", async (request) => {
+  app.post("/match/not-found", { config: perParticipant(10) }, async (request) => {
     const me = request.participant!;
     const { matchId } = matchActionInput.parse(request.body);
     return live.giveUp(me.eventId, { participantId: me.id, matchId });

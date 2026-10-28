@@ -13,6 +13,9 @@ export class ApiError extends Error {
   }
 }
 
+const REQUEST_TIMEOUT_MS = 20_000;
+const UPLOAD_TIMEOUT_MS = 60_000;
+
 interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "DELETE";
   /** Wird als JSON gesendet, außer es ist ein Blob (dann roh mit dessen Content-Type). */
@@ -38,8 +41,21 @@ export async function api<T = void>(
 
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, { method, headers, body: payload, credentials: "same-origin" });
-  } catch {
+    res = await fetch(`/api${path}`, {
+      method,
+      headers,
+      body: payload,
+      credentials: "same-origin",
+      // Im schwachen Event-WLAN hängen Anfragen sonst unbegrenzt; Uploads dürfen länger dauern.
+      signal: AbortSignal.timeout(body instanceof Blob ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ApiError(0, {
+        error: "timeout",
+        message: "Der Server antwortet gerade nicht. Bitte noch einmal versuchen.",
+      });
+    }
     throw new ApiError(0, { error: "network", message: "Keine Verbindung zum Server." });
   }
 

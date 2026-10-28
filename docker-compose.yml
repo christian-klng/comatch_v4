@@ -38,6 +38,10 @@ services:
   app:
     profiles: ["full"]
     build: .
+    # Stürzt der Prozess ab, startet Docker ihn neu; laufende Runden setzt er aus der DB fort.
+    restart: unless-stopped
+    # Zeit für das saubere Herunterfahren (laufende DB-Arbeit abwarten).
+    stop_grace_period: 15s
     environment:
       DATABASE_URL: postgres://comatch:comatch@postgres:5432/comatch
       PUBLIC_BASE_URL: http://localhost:${APP_PORT:-3000}

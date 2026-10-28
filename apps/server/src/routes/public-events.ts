@@ -14,8 +14,9 @@ export const publicEventRoutes: FastifyPluginAsync<AppContext> = async (app, { d
 
   app.post<{ Params: { slug: string } }>(
     "/events/:slug/join",
-    // Großzügig, weil im Event-WLAN viele Handys hinter derselben IP stecken.
-    { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
+    // Je IP, aber großzügig: Im Event-WLAN stecken oft alle Handys hinter einer Adresse, und zum
+    // Start treten viele gleichzeitig bei. Die Obergrenze je Event schützt zusätzlich.
+    { config: { rateLimit: { max: 600, timeWindow: "1 minute" } } },
     async (request, reply) => {
       const input = joinInput.parse(request.body);
       const { token, participant } = await joinEvent(db, request.params.slug, input);

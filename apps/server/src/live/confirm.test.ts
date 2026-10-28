@@ -132,6 +132,19 @@ describe("Bestätigung per Code", () => {
     ).rejects.toMatchObject({ status: 409, code: "match_changed" });
   });
 
+  it("schickt nur den Beteiligten einen neuen Zustand", async () => {
+    const { eventId, people } = await started(4);
+    const [a] = people;
+    const partner = matchOf(a!.id).confirm.targetId;
+    const others = people.map((p) => p.id).filter((id) => id !== a!.id && id !== partner);
+    const before = others.map((id) => t.emits.countFor(id));
+    const partnerBefore = t.emits.countFor(partner);
+
+    await confirm(eventId, a!.id);
+    expect(others.map((id) => t.emits.countFor(id))).toEqual(before);
+    expect(t.emits.countFor(partner)).toBe(partnerBefore + 1);
+  });
+
   it("nimmt in der Pause keine Codes an", async () => {
     const { eventId, people } = await started(2);
     await t.live.control(eventId, "pause");

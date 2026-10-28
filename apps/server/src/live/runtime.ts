@@ -34,6 +34,8 @@ import { buildEventLive, buildParticipantLive, isPresent } from "./views.ts";
 
 /** Wie oft der Pool-Matcher während einer Runde nach Wartenden sieht. */
 export const POOL_TICK_MS = 3_000;
+/** Scheitert der Rundenwechsel (z. B. DB kurz weg), wird er nach dieser Pause wiederholt. */
+export const ROUND_RETRY_MS = 5_000;
 /** Zähler für Leinwand und Admins werden gebündelt, damit viele Verbindungswechsel nicht fluten. */
 const EVENT_STATE_DEBOUNCE_MS = 1_000;
 
@@ -79,6 +81,8 @@ export class LiveEvents {
   private readonly inFlight = new Set<Promise<unknown>>();
   /** Offene Verbindungen je Person (mehrere Tabs möglich). */
   private readonly connections = new Map<string, { eventId: string; count: number }>();
+  /** Zuletzt gesendeter Zustand je Person (ohne Serverzeit), um Wiederholungen zu sparen. */
+  private readonly lastSent = new Map<string, string>();
 
   private deps: LiveDeps;
 
@@ -112,9 +116,32 @@ export class LiveEvents {
   }
 
   /** Für Timer-Callbacks: Fehler werden geloggt statt verschluckt. */
-  private fire(eventId: string, task: () => Promise<unknown>) {
-    this.run(eventId, task).catch((err: unknown) =>
-      this.deps.log?.error({ err, eventId }, "Live-Aufgabe fehlgeschlagen"),
+  private fire(eventId: string, task: () => Promise<unknown>, onError?: () => void) {
+    this.run(eventId, task).catch((err: unknown) => {
+      this.deps.log?.error({ err, eventId }, "Live-Aufgabe fehlgeschlagen");
+      onError?.();
+    });
+  }
+
+  logError(err: unknown, msg: string) {
+    this.deps.log?.error({ err }, msg);
+  }
+
+  /** Rundenwechsel; scheitert er, kommt ein neuer Versuch, statt dass das Event stehen bleibt. */
+  private armRoundTimer(eventId: string, delay: number) {
+    const { clock } = this.deps;
+    clock.clearTimeout(this.roundTimers.get(eventId));
+    this.roundTimers.set(
+      eventId,
+      clock.setTimeout(
+        () =>
+          this.fire(
+            eventId,
+            () => this.onRoundTimer(eventId),
+            () => this.armRoundTimer(eventId, ROUND_RETRY_MS),
+          ),
+        delay,
+      ),
     );
   }
 
@@ -136,11 +163,7 @@ export class LiveEvents {
     const { clock } = this.deps;
     this.clearTimers(ev.id);
     if (ev.status !== "running" || !ev.roundEndsAt) return;
-    const delay = Math.max(0, ev.roundEndsAt.getTime() - clock.now());
-    this.roundTimers.set(
-      ev.id,
-      clock.setTimeout(() => this.fire(ev.id, () => this.onRoundTimer(ev.id)), delay),
-    );
+    this.armRoundTimer(ev.id, Math.max(0, ev.roundEndsAt.getTime() - clock.now()));
     this.poolTimers.set(
       ev.id,
       clock.setInterval(
@@ -180,6 +203,7 @@ export class LiveEvents {
   reset() {
     this.stop();
     this.connections.clear();
+    this.lastSent.clear();
   }
 
   /** Alle Timer stoppen (Herunterfahren, Tests). Verbindungen bleiben unberührt. */
@@ -593,6 +617,7 @@ export class LiveEvents {
     const entry = this.connections.get(participantId);
     if (entry && --entry.count <= 0) this.connections.delete(participantId);
     if (this.connections.has(participantId)) return Promise.resolve();
+    this.lastSent.delete(participantId);
 
     return this.run(eventId, async () => {
       await this.deps.db
@@ -640,7 +665,20 @@ export class LiveEvents {
 
   private async sendParticipantState(eventId: string, participantId: string) {
     const state = await this.participantState(participantId, eventId);
-    if (state) this.emitter.toParticipant(participantId, state);
+    if (state) this.send(participantId, state, true);
+  }
+
+  /**
+   * Schickt einem Handy seinen Zustand, aber nur, wenn sich etwas geändert hat. Sonst bekämen bei
+   * jeder Bestätigung alle Handys denselben Zustand noch einmal (bei 200 Personen ~4 Nachrichten
+   * pro Sekunde und Handy). Beim Verbinden immer senden.
+   */
+  private send(participantId: string, state: ParticipantLive, always = false) {
+    const { serverNow: _serverNow, ...content } = state;
+    const key = JSON.stringify(content);
+    if (!always && this.lastSent.get(participantId) === key) return;
+    this.lastSent.set(participantId, key);
+    this.emitter.toParticipant(participantId, state);
   }
 
   /** Sendet allen verbundenen Handys des Events und Leinwand/Admins den aktuellen Zustand. */
@@ -653,7 +691,7 @@ export class LiveEvents {
     for (const [participantId, entry] of this.connections) {
       if (entry.eventId !== eventId) continue;
       const state = buildParticipantLive(snapshot, participantId, { connected, now, media: this.deps.media });
-      if (state) this.emitter.toParticipant(participantId, state);
+      if (state) this.send(participantId, state);
     }
   }
 
