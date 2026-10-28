@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
-import { IMAGE_MIME_TYPES, SELFIE_MAX_BYTES } from "@comatch/shared";
+import { confirmCodeInput, IMAGE_MIME_TYPES, matchActionInput, SELFIE_MAX_BYTES } from "@comatch/shared";
 import type { AppContext } from "../context.ts";
 import { participant } from "../db/schema.ts";
 import { HttpError } from "../lib/errors.ts";
@@ -55,6 +55,24 @@ export const participantRoutes: FastifyPluginAsync<AppContext> = async (
     // Neues Selfie: Gegenüber und Leinwand sehen es sofort; beim ersten Selfie startet die Suche.
     await live.participantChanged(me.eventId);
     return getParticipantMe(db, media, updated!);
+  });
+
+  /** Code des Gegenübers gewählt. Falsche Codes sperren kurz; das regelt die Live-Laufzeit. */
+  app.post(
+    "/match/confirm",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request) => {
+      const me = request.participant!;
+      const input = confirmCodeInput.parse(request.body);
+      return live.confirmCode(me.eventId, { participantId: me.id, ...input });
+    },
+  );
+
+  /** „Nicht gefunden“: neues Match suchen (ab Rundenmitte). */
+  app.post("/match/not-found", async (request) => {
+    const me = request.participant!;
+    const { matchId } = matchActionInput.parse(request.body);
+    return live.giveUp(me.eventId, { participantId: me.id, matchId });
   });
 
   /** „Ich steige aus“: löscht Selfie, Antworten und die Person sofort. */

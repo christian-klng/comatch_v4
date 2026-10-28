@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { POOL_CUTOFF_MS, type ParticipantLive, type ParticipantMe, type PublicEvent } from "@comatch/shared";
 import { errorMessage } from "../../lib/api.ts";
 import { formatCountdown, useLive, useRemaining } from "../../lib/live.ts";
+import { ConfirmedScreen, MatchScreen } from "./MatchScreen.tsx";
 import { Message, PrimaryButton, SecondaryButton } from "./parts.tsx";
 
 /** Hält den Bildschirm wach, solange die Live-Ansicht offen ist (wo der Browser das kann). */
@@ -24,13 +25,18 @@ function useWakeLock() {
   }, []);
 }
 
-/** Kurz vibrieren, sobald ein neues Match da ist. */
-function useVibrateOnNewMatch(matchId: string | undefined) {
-  const previous = useRef(matchId);
+/** Kurz vibrieren, sobald ein neues Match da ist, und doppelt, wenn es bestätigt ist. */
+function useVibrate(state: ParticipantLive | null) {
+  const key = state ? (state.match ? `${state.match.id}:${state.match.status}` : "") : null;
+  // null: noch kein Zustand da (z. B. nach dem Neuladen). Der erste Zustand ist nichts Neues.
+  const previous = useRef<string | null>(null);
   useEffect(() => {
-    if (matchId && matchId !== previous.current) navigator.vibrate?.(200);
-    previous.current = matchId;
-  }, [matchId]);
+    if (key === null) return;
+    if (previous.current !== null && key && key !== previous.current) {
+      navigator.vibrate?.(key.endsWith(":confirmed") ? [100, 60, 100] : 200);
+    }
+    previous.current = key;
+  }, [key]);
 }
 
 function PulseDots() {
@@ -123,6 +129,9 @@ function Waiting({
     } else if (remaining !== null && remaining < POOL_CUTOFF_MS) {
       title = "Gleich geht’s weiter";
       hint = `Die nächste Runde startet in ${formatCountdown(remaining)}. Dann bekommst du dein Match.`;
+    } else if (state?.previousMatchEnded) {
+      title = "Neues Match wird gesucht …";
+      hint = "Das letzte Match hat nicht geklappt. Gleich bekommst du jemand Neues.";
     } else {
       title = "Wir suchen dein Match …";
       hint = "Das dauert höchstens eine halbe Minute. Lass diese Seite offen.";
@@ -159,47 +168,6 @@ function Waiting({
   );
 }
 
-function MatchScreen({
-  match,
-  round,
-  remaining,
-}: {
-  match: NonNullable<ParticipantLive["match"]>;
-  round: number;
-  remaining: number | null;
-}) {
-  const many = match.partners.length > 1;
-  return (
-    <div className="flex flex-1 flex-col items-center gap-5 text-center">
-      <p className="text-sm text-slate-400 tabular-nums">
-        Runde {round} · noch {formatCountdown(remaining)}
-      </p>
-      <h1 className="text-3xl font-bold">{many ? "Finde diese beiden!" : "Finde diese Person!"}</h1>
-      <div className={many ? "grid w-full grid-cols-2 gap-3" : "w-full max-w-64"}>
-        {match.partners.map((p) =>
-          p.selfieUrl ? (
-            <img
-              key={p.id}
-              src={p.selfieUrl}
-              alt="Selfie deines Matches"
-              className="aspect-[3/4] w-full rounded-3xl object-cover ring-4 ring-brand"
-            />
-          ) : (
-            <div key={p.id} className="aspect-[3/4] w-full rounded-3xl bg-white/5 ring-1 ring-white/10" />
-          ),
-        )}
-      </div>
-      <div className="mt-auto w-full rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-        <p className="text-sm text-slate-400">Dein Code</p>
-        <p className="font-mono text-5xl font-bold tracking-widest text-brand tabular-nums">
-          {match.ownCode}
-        </p>
-        <p className="mt-1 text-sm text-slate-400">Zeig ihn deinem Gegenüber, wenn ihr euch gefunden habt.</p>
-      </div>
-    </div>
-  );
-}
-
 /**
  * Alles nach dem Beitritt: Lobby, Suche, Match, Pause und Ende. Der Server schickt bei jeder
  * Änderung den vollständigen Zustand; Countdowns rechnen mit dem gemessenen Uhren-Offset.
@@ -220,10 +188,13 @@ export function LiveView({
   onSessionInvalid: () => void;
 }) {
   const live = useLive<ParticipantLive>({ role: "participant", token }, "state");
-  const state = live.data;
+  // Antworten auf eigene Aktionen kommen per REST und Socket; der neuere Zustand gewinnt.
+  const [fromResponse, setFromResponse] = useState<ParticipantLive | null>(null);
+  const state =
+    fromResponse && (!live.data || fromResponse.serverNow > live.data.serverNow) ? fromResponse : live.data;
   const remaining = useRemaining(state?.clock.roundEndsAt ?? null, live.offsetMs);
   useWakeLock();
-  useVibrateOnNewMatch(state?.match?.id);
+  useVibrate(state);
 
   useEffect(() => {
     if (live.invalid) onSessionInvalid();
@@ -254,11 +225,27 @@ export function LiveView({
       </>
     );
   }
+  if (status === "running" && state?.match?.status === "confirmed") {
+    return (
+      <>
+        {offline}
+        <ConfirmedScreen match={state.match} remaining={remaining} />
+      </>
+    );
+  }
   if (status === "running" && state?.match) {
     return (
       <>
         {offline}
-        <MatchScreen match={state.match} round={state.clock.round} remaining={remaining} />
+        <MatchScreen
+          key={state.match.id}
+          match={state.match}
+          round={state.clock.round}
+          remaining={remaining}
+          offsetMs={live.offsetMs}
+          token={token}
+          onState={setFromResponse}
+        />
       </>
     );
   }

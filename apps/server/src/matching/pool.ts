@@ -43,7 +43,8 @@ export interface PoolResult {
  * 1. Wartende werden sofort miteinander gepaart, sobald mindestens zwei da sind.
  *    Paare, die sich schon getroffen haben, entstehen im Pool nicht.
  * 2. Wer übrig bleibt (bei ungerader Anzahl die zuletzt gekommene Person) und lange genug wartet,
- *    kommt als Dritte in das offene Match, zu dem sie am besten passt (je Match höchstens eine).
+ *    kommt als Dritte in das offene Match, zu dem sie am besten passt (je Match höchstens eine,
+ *    nie zu jemandem, den sie schon getroffen hat).
  * 3. Sonst wartet die Person weiter (notfalls bis zur nächsten Runde).
  */
 export function matchPool(input: PoolInput): PoolResult {
@@ -84,6 +85,7 @@ export function matchPool(input: PoolInput): PoolResult {
     let bestScore = -Infinity;
     if (due) {
       freeGroups.forEach((group, index) => {
+        if (group.members.some((m) => table.isRepeat(id, m.id))) return;
         const score = joinScore(
           id,
           group.members.map((m) => m.id),

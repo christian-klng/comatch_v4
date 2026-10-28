@@ -10,7 +10,7 @@ export function pairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
-function questionMatches(q: MatchQuestion, a: string | undefined, b: string | undefined): boolean {
+export function questionMatches(q: MatchQuestion, a: string | undefined, b: string | undefined): boolean {
   if (a === undefined || b === undefined) return false;
   if (q.matchMode === "same") return a === b;
   // Ergänzend: Ohne jede Zuordnung passt jede andere Antwort, sonst nur zugeordnete Gegenstücke.

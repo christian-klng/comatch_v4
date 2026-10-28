@@ -8,5 +8,5 @@ export {
   type PoolInput,
   type PoolResult,
 } from "./pool.ts";
-export { pairKey, similarity } from "./score.ts";
+export { pairKey, questionMatches, similarity } from "./score.ts";
 export type { MatchingContext, MatchPerson, MatchQuestion, PairHistory, PlannedGroup } from "./types.ts";

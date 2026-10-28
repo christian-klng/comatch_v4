@@ -87,7 +87,8 @@ export function EventControls({
             {counts ? (
               <>
                 <Stat value={counts.joined} label="dabei" />
-                <Stat value={counts.matched + counts.confirmed} label="im Match" />
+                <Stat value={counts.matched} label="im Match" />
+                <Stat value={counts.confirmed} label="bestätigt" />
                 <Stat value={counts.waiting} label="warten" />
                 {counts.inactive > 0 && <Stat value={counts.inactive} label="inaktiv" muted />}
               </>

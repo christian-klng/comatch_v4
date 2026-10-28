@@ -1,14 +1,22 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
-import type { EventControlAction, EventLive, EventStatus, ParticipantLive } from "@comatch/shared";
+import type {
+  ConfirmCodeResult,
+  EventControlAction,
+  EventLive,
+  EventStatus,
+  ParticipantLive,
+} from "@comatch/shared";
 import type { Db } from "../db/client.ts";
 import { event, matchGroup, participant, round } from "../db/schema.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
 import type { MediaSigner } from "../lib/media.ts";
 import { matchPool, pairRound } from "../matching/index.ts";
 import type { Clock } from "./clock.ts";
+import { giveUpMatch, submitCode } from "./confirm.ts";
 import {
   addToGroup,
+  completeIfConfirmed,
   currentRoundRow,
   insertGroups,
   loadHistory,
@@ -132,7 +140,13 @@ export class LiveEvents {
     );
     this.poolTimers.set(
       ev.id,
-      clock.setInterval(() => this.fire(ev.id, () => this.poolTick(ev.id)), POOL_TICK_MS),
+      clock.setInterval(
+        () =>
+          this.fire(ev.id, async () => {
+            if (await this.matchWaiting(ev.id)) await this.broadcast(ev.id);
+          }),
+        POOL_TICK_MS,
+      ),
     );
   }
 
@@ -303,6 +317,7 @@ export class LiveEvents {
         roundNumber: number,
         kind: "round",
         groups: plan.groups,
+        createdAt: new Date(now),
       });
       if (plan.unmatched.length > 0) {
         await tx
@@ -324,12 +339,12 @@ export class LiveEvents {
     this.schedule(ev);
   }
 
-  /** Schnellmatch für Wartende während einer Runde. */
-  private async poolTick(eventId: string) {
+  /** Schnellmatch für Wartende während einer Runde. Gibt zurück, ob neue Matches entstanden sind. */
+  private async matchWaiting(eventId: string): Promise<boolean> {
     const { db, clock } = this.deps;
     const now = clock.now();
     const ev = await loadLiveEvent(db, eventId);
-    if (ev?.status !== "running" || !ev.roundEndsAt) return;
+    if (ev?.status !== "running" || !ev.roundEndsAt) return false;
 
     const connected = this.connectedIds();
     const waiting = (
@@ -338,10 +353,10 @@ export class LiveEvents {
         .from(participant)
         .where(and(eq(participant.eventId, eventId), eq(participant.status, "pool")))
     ).filter((p) => p.poolSince && isPresent(p, connected, now));
-    if (waiting.length === 0) return;
+    if (waiting.length === 0) return false;
 
     const roundRow = await currentRoundRow(db, ev);
-    if (!roundRow) return;
+    if (!roundRow) return false;
     const open = (await loadRoundGroups(db, roundRow.id)).filter(
       (g) => g.status === "open" && g.members.length === 2 && g.members.every((m) => !m.confirmedAt),
     );
@@ -369,7 +384,7 @@ export class LiveEvents {
         members: g.members.map((m) => personById.get(m.participantId)!),
       })),
     });
-    if (result.newGroups.length === 0 && result.joins.length === 0) return;
+    if (result.newGroups.length === 0 && result.joins.length === 0) return false;
 
     await db.transaction(async (tx) => {
       await insertGroups(tx, {
@@ -378,11 +393,45 @@ export class LiveEvents {
         roundNumber: ev.currentRound,
         kind: "pool",
         groups: result.newGroups,
+        createdAt: new Date(now),
       });
       for (const join of result.joins)
         await addToGroup(tx, eventId, ev.currentRound, join.groupId, join.group);
     });
-    await this.broadcast(eventId);
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Bestätigung
+  // -------------------------------------------------------------------------
+
+  /** Die Person hat einen Code gewählt (aus den Optionen oder eingetippt). */
+  confirmCode(
+    eventId: string,
+    input: { participantId: string; matchId: string; code: string },
+  ): Promise<ConfirmCodeResult> {
+    return this.run(eventId, async () => {
+      const { db, clock } = this.deps;
+      const ev = await loadLiveEvent(db, eventId);
+      if (!ev) throw notFound("event_not_found");
+      const result = await db.transaction((tx) => submitCode(tx, ev, { ...input, now: clock.now() }));
+      await this.broadcast(eventId);
+      const state = await this.participantState(input.participantId, eventId);
+      return { result, state: state! };
+    });
+  }
+
+  /** „Nicht gefunden“: raus aus dem Match und gleich nach einem neuen suchen. */
+  giveUp(eventId: string, input: { participantId: string; matchId: string }): Promise<ParticipantLive> {
+    return this.run(eventId, async () => {
+      const { db, clock } = this.deps;
+      const ev = await loadLiveEvent(db, eventId);
+      if (!ev) throw notFound("event_not_found");
+      await db.transaction((tx) => giveUpMatch(tx, ev, { ...input, now: clock.now() }));
+      await this.matchWaiting(eventId);
+      await this.broadcast(eventId);
+      return (await this.participantState(input.participantId, eventId))!;
+    });
   }
 
   /**
@@ -410,8 +459,10 @@ export class LiveEvents {
         if (g.status === "open" && ids.length < 2) {
           await tx.update(matchGroup).set({ status: "expired" }).where(eq(matchGroup.id, g.id));
           ids.forEach((id) => backToPool.add(id));
-        } else if (g.members.some((m) => !ids.includes(m.confirmsParticipantId))) {
+        } else if (g.status === "open" && g.members.some((m) => !ids.includes(m.confirmsParticipantId))) {
           await rewriteMembers(tx, g.id, ids, g.similarity);
+          // Wer übrig ist, hat sich vielleicht schon gegenseitig bestätigt.
+          await completeIfConfirmed(tx, g.id, new Date(clock.now()));
         }
       }
       // Wer „matched“ ist, aber in keiner Gruppe mehr steckt (Mitgliedschaft per Cascade gelöscht).

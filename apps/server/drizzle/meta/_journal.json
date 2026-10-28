@@ -29,6 +29,13 @@
       "when": 1793112623935,
       "tag": "0003_live_rounds",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793136562489,
+      "tag": "0004_match_confirmation",
+      "breakpoints": true
     }
   ]
 }

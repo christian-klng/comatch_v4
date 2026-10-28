@@ -247,8 +247,15 @@ export const matchMember = pgTable(
     confirmsParticipantId: uuid()
       .notNull()
       .references(() => participant.id, { onDelete: "cascade" }),
+    /** Zwei Köder-Codes, die neben dem richtigen Code zur Auswahl stehen. */
+    decoyCodes: text()
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     confirmedAt: timestamp({ withTimezone: true }),
     wrongAttempts: smallint().notNull().default(0),
+    /** Letzte falsche Auswahl (für die kurze Sperre danach). */
+    lastWrongAt: timestamp({ withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.matchGroupId, t.participantId] }), index().on(t.participantId)],
 );

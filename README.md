@@ -2,7 +2,7 @@
 
 Live-Matchmaking für Gründer*innen auf Präsenzveranstaltungen. Gesamtplan und Entscheidungen: [PLAN.md](PLAN.md).
 
-**Stand:** M4 fertig. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3). Jetzt laufen die Runden automatisch: Admins starten, pausieren, beenden und schalten weiter. Die Handys bekommen ihr Match und den Countdown live per Socket.IO (M4). Codes bestätigen (M5) und die Leinwand (M6) folgen.
+**Stand:** M5 fertig. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3), die Runden laufen automatisch und live per Socket.IO (M4). Jetzt ist der Spielablauf am Handy komplett: Selfie des Gegenübers mit Gemeinsamkeiten, gegenseitige Bestätigung per Code mit Ködern, Fehlversuche und „Nicht gefunden“ (M5). Die Leinwand (M6) folgt.
 
 ## Voraussetzungen
 
@@ -41,20 +41,20 @@ packages/
 
 ## Skripte
 
-| Befehl                                                                                    | Zweck                                                                         |
-| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `npm run dev`                                                                             | Server und Web mit Hot Reload                                                 |
-| `npm run typecheck`                                                                       | TypeScript-Prüfung aller Workspaces                                           |
-| `npm run lint` / `npm run format`                                                         | ESLint / Prettier                                                             |
-| `npm test`                                                                                | Vitest in allen Workspaces                                                    |
-| `npm run build`                                                                           | Web-Frontend bauen                                                            |
-| `npm run db:generate`                                                                     | Migration aus Änderungen an `schema.ts` erzeugen                              |
-| `npm run db:migrate`                                                                      | Migrationen anwenden (passiert auch beim Serverstart)                         |
-| `npm run db:seed`                                                                         | Admin-Konto und Demo-Event anlegen (mehrfach ausführbar)                      |
-| `npm run db:studio`                                                                       | Drizzle Studio (DB-Browser)                                                   |
-| `npm run simulate -w @comatch/server -- --people 100 --rounds 8`                          | Matching-Simulation: Übereinstimmung, Wiederholungen, Laufzeit je Runde       |
-| `npm run bots -w @comatch/server -- --event <code> --count 5 --url http://localhost:5173` | Simulierte Teilnehmende: treten bei, laden ein Selfie hoch, bleiben verbunden |
-| `docker compose --profile full up -d`                                                     | Produktions-Container + Postgres + S3 auf <http://localhost:3000>             |
+| Befehl                                                                                    | Zweck                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                                                                             | Server und Web mit Hot Reload                                                                                                                                                                            |
+| `npm run typecheck`                                                                       | TypeScript-Prüfung aller Workspaces                                                                                                                                                                      |
+| `npm run lint` / `npm run format`                                                         | ESLint / Prettier                                                                                                                                                                                        |
+| `npm test`                                                                                | Vitest in allen Workspaces                                                                                                                                                                               |
+| `npm run build`                                                                           | Web-Frontend bauen                                                                                                                                                                                       |
+| `npm run db:generate`                                                                     | Migration aus Änderungen an `schema.ts` erzeugen                                                                                                                                                         |
+| `npm run db:migrate`                                                                      | Migrationen anwenden (passiert auch beim Serverstart)                                                                                                                                                    |
+| `npm run db:seed`                                                                         | Admin-Konto und Demo-Event anlegen (mehrfach ausführbar)                                                                                                                                                 |
+| `npm run db:studio`                                                                       | Drizzle Studio (DB-Browser)                                                                                                                                                                              |
+| `npm run simulate -w @comatch/server -- --people 100 --rounds 8`                          | Matching-Simulation: Übereinstimmung, Wiederholungen, Laufzeit je Runde                                                                                                                                  |
+| `npm run bots -w @comatch/server -- --event <code> --count 5 --url http://localhost:5173` | Simulierte Teilnehmende: treten bei, laden ein Selfie hoch, bestätigen ihr Match nach 8–40 s (`--confirm 8-40`); Codes echter Personen raten sie. Mit `--not-found 0.2` drückt ein Teil „Nicht gefunden“ |
+| `docker compose --profile full up -d`                                                     | Produktions-Container + Postgres + S3 auf <http://localhost:3000>                                                                                                                                        |
 
 ## Technische Entscheidungen
 
@@ -79,7 +79,15 @@ packages/
 - **Live-Betrieb** (`apps/server/src/live`): Postgres bleibt die Quelle der Wahrheit, im Speicher liegen nur Timer und offene Verbindungen. Alle Änderungen an einem Event laufen nacheinander durch eine Warteschlange. Nach einem Neustart werden laufende Runden aus `round_ends_at` fortgesetzt.
   - Jede Änderung schickt jedem Handy seinen vollständigen Zustand („Snapshot statt Delta“); Leinwand und Admins bekommen Zähler und Rundentakt. Countdowns rechnen mit dem gemessenen Uhren-Offset.
   - Pool-Matcher alle 3 s während einer Runde. Wer länger als 60 s keine Verbindung hatte, wird zum Rundenwechsel inaktiv und kommt beim Wiederverbinden zurück in den Pool.
-  - Verlässt jemand ein Match (Austritt), kommt das Gegenüber ohne Wartezeit zurück in den Pool.
+  - Verlässt jemand ein Match (Austritt), kommt das Gegenüber ohne Wartezeit zurück in den Pool. Im Pool kommt niemand zu jemandem, den die Person schon getroffen hat.
   - Beim Herunterfahren schließt der Server nur die Transporte, damit sich Clients nach einem Neustart selbst neu verbinden. Clients verbinden sich auch nach einer Trennung durch den Server neu, außer ihre Sitzung wurde abgelehnt.
   - Uhr und Timer sind austauschbar (`createManualClock`), dadurch laufen Rundenwechsel in den Tests ohne Warten.
-- **Bestätigungscodes** sind vorerst dreistellige Zahlen ohne Auswahl; Format und Köder kommen mit M5.
+- **Bestätigung** (`apps/server/src/live/codes.ts`, `confirm.ts`):
+  - Codes sind dreistellige Zahlen mit verschiedenen Ziffern ohne führende Null. Emoji + Wort (Plan, offene Frage) ist bewusst noch nicht gebaut; das Format steckt nur in `codes.ts`.
+  - Zur Auswahl stehen der richtige Code und zwei Köder: einer mit vertauschten Ziffern, einer mit einer anderen Ziffer. Köder sind gespeichert und die Reihenfolge ist stabil, damit Neuladen nichts verrät; nach jeder falschen Wahl wird neu gemischt.
+  - Falsche Wahl: 5 s Sperre (serverseitig). Nach 3 Fehlversuchen gibt es keine Auswahl mehr, nur noch die Eingabe des Codes.
+  - Paare bestätigen sich gegenseitig, Dreiergruppen im Ring A→B→C→A. Kommt jemand dazu oder geht, behält jede Person ihren Code; wer dieselbe Person bestätigen muss wie vorher, behält auch ihren Stand.
+  - Bestätigt heißt: Pause bis Rundenende, kein weiteres Match in dieser Runde.
+  - „Nicht gefunden“ geht ab Rundenmitte und frühestens 1 min nach Beginn des Matches, nicht mehr nach der eigenen Bestätigung. Ein Paar löst sich auf, in einer Dreiergruppe suchen die anderen beiden weiter. Wer frei wird, kommt sofort in den Pool; bleibt weniger als 1 min, geht es in der nächsten Runde weiter.
+  - Code wählen und „Nicht gefunden“ laufen über REST (`POST /api/participant/match/confirm` und `/not-found`) statt über Socket-Nachrichten wie im Plan: So gibt es klare Fehlercodes und das Rate-Limit greift. Die Antwort enthält den neuen Zustand; alle anderen bekommen ihn per Socket.
+  - Gemeinsamkeiten berechnet der Server je Paar aus den passenden Fragen. Das Handy sieht nur diese, nicht alle Antworten des Gegenübers.

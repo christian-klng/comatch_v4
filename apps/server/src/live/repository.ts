@@ -14,7 +14,7 @@ import {
   round,
 } from "../db/schema.ts";
 import { pairKey, type MatchPerson, type MatchQuestion, type PlannedGroup } from "../matching/index.ts";
-import { assignCodes } from "./codes.ts";
+import { assignCodes, type MemberCode } from "./codes.ts";
 
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type Conn = Db | Tx;
@@ -132,6 +132,8 @@ async function recordPairs(tx: Tx, eventId: string, members: readonly string[], 
     });
 }
 
+const memberRow = (matchGroupId: string, { kept: _kept, ...m }: MemberCode) => ({ ...m, matchGroupId });
+
 /** Legt geplante Gruppen samt Codes an, schreibt die Historie fort und setzt die Personen auf „matched“. */
 export async function insertGroups(
   tx: Tx,
@@ -141,16 +143,21 @@ export async function insertGroups(
     roundNumber: number;
     kind: MatchGroupKind;
     groups: readonly PlannedGroup[];
+    createdAt: Date;
   },
 ) {
   for (const group of opts.groups) {
     const [created] = await tx
       .insert(matchGroup)
-      .values({ eventId: opts.eventId, roundId: opts.roundId, kind: opts.kind, similarity: group.similarity })
+      .values({
+        eventId: opts.eventId,
+        roundId: opts.roundId,
+        kind: opts.kind,
+        similarity: group.similarity,
+        createdAt: opts.createdAt,
+      })
       .returning({ id: matchGroup.id });
-    await tx
-      .insert(matchMember)
-      .values(assignCodes(group.members).map((m) => ({ ...m, matchGroupId: created!.id })));
+    await tx.insert(matchMember).values(assignCodes(group.members).map((m) => memberRow(created!.id, m)));
     await recordPairs(tx, opts.eventId, group.members, opts.roundNumber);
   }
   const ids = opts.groups.flatMap((g) => g.members);
@@ -162,7 +169,10 @@ export async function insertGroups(
   }
 }
 
-/** Setzt die Mitglieder einer Gruppe neu (Dritte kommt dazu oder jemand ist gegangen); Codes bleiben erhalten. */
+/**
+ * Setzt die Mitglieder einer Gruppe neu (Dritte kommt dazu oder jemand ist gegangen). Codes
+ * bleiben erhalten; wer dieselbe Person bestätigen muss wie vorher, behält auch seinen Stand.
+ */
 export async function rewriteMembers(
   tx: Tx,
   groupId: string,
@@ -170,12 +180,46 @@ export async function rewriteMembers(
   similarity: number,
 ) {
   const existing = await tx.select().from(matchMember).where(eq(matchMember.matchGroupId, groupId));
-  const codes = new Map(existing.map((m) => [m.participantId, m.ownCode]));
+  const previous = new Map(existing.map((m) => [m.participantId, m]));
+  const codes = assignCodes(memberIds, previous);
   await tx.delete(matchMember).where(eq(matchMember.matchGroupId, groupId));
-  await tx
-    .insert(matchMember)
-    .values(assignCodes(memberIds, codes).map((m) => ({ ...m, matchGroupId: groupId })));
+  await tx.insert(matchMember).values(
+    codes.map((m) => {
+      const before = m.kept ? previous.get(m.participantId) : undefined;
+      return {
+        ...memberRow(groupId, m),
+        confirmedAt: before?.confirmedAt ?? null,
+        wrongAttempts: before?.wrongAttempts ?? 0,
+        lastWrongAt: before?.lastWrongAt ?? null,
+      };
+    }),
+  );
   await tx.update(matchGroup).set({ similarity }).where(eq(matchGroup.id, groupId));
+}
+
+/** Haben alle in der Gruppe bestätigt, gilt das Match als bestätigt: Pause bis Rundenende. */
+export async function completeIfConfirmed(tx: Tx, groupId: string, now: Date): Promise<boolean> {
+  const members = await tx.select().from(matchMember).where(eq(matchMember.matchGroupId, groupId));
+  if (members.length < 2 || members.some((m) => !m.confirmedAt)) return false;
+  const [updated] = await tx
+    .update(matchGroup)
+    .set({ status: "confirmed", confirmedAt: now })
+    .where(and(eq(matchGroup.id, groupId), eq(matchGroup.status, "open")))
+    .returning({ id: matchGroup.id });
+  if (!updated) return false;
+  await tx
+    .update(participant)
+    .set({ status: "confirmed", poolSince: null })
+    .where(
+      and(
+        inArray(
+          participant.id,
+          members.map((m) => m.participantId),
+        ),
+        eq(participant.status, "matched"),
+      ),
+    );
+  return true;
 }
 
 export async function addToGroup(
@@ -202,11 +246,15 @@ export interface GroupView {
   kind: MatchGroupKind;
   status: "open" | "confirmed" | "expired";
   similarity: number;
+  createdAt: Date;
   members: {
     participantId: string;
     ownCode: string;
     confirmsParticipantId: string;
+    decoyCodes: string[];
     confirmedAt: Date | null;
+    wrongAttempts: number;
+    lastWrongAt: Date | null;
   }[];
 }
 
@@ -229,29 +277,73 @@ export async function loadRoundGroups(db: Conn, roundId: string | null): Promise
     kind: g.kind,
     status: g.status,
     similarity: g.similarity,
+    createdAt: g.createdAt,
     members: members
       .filter((m) => m.matchGroupId === g.id)
       .map((m) => ({
         participantId: m.participantId,
         ownCode: m.ownCode,
         confirmsParticipantId: m.confirmsParticipantId,
+        decoyCodes: m.decoyCodes,
         confirmedAt: m.confirmedAt,
+        wrongAttempts: m.wrongAttempts,
+        lastWrongAt: m.lastWrongAt,
       })),
   }));
+}
+
+/** Fragen mit Texten, für die Gemeinsamkeiten auf dem Match-Screen. */
+export interface QuestionView extends MatchQuestion {
+  text: string;
+  labels: ReadonlyMap<string, string>;
 }
 
 export interface LiveSnapshot {
   event: LiveEventRow;
   participants: ParticipantRow[];
   groups: GroupView[];
+  questions: QuestionView[];
+  /** Antworten je Person: questionId → optionId */
+  answers: ReadonlyMap<string, Readonly<Record<string, string>>>;
 }
 
 export async function loadSnapshot(db: Conn, eventId: string): Promise<LiveSnapshot | null> {
   const ev = await loadLiveEvent(db, eventId);
   if (!ev) return null;
-  const [participants, roundRow] = await Promise.all([
+  const [participants, roundRow, matching, texts, options, answerRows] = await Promise.all([
     db.select().from(participant).where(eq(participant.eventId, eventId)),
     currentRoundRow(db, ev),
+    loadQuestionsForMatching(db, eventId),
+    db.select({ id: question.id, text: question.text }).from(question).where(eq(question.eventId, eventId)),
+    db
+      .select({ id: answerOption.id, label: answerOption.label })
+      .from(answerOption)
+      .innerJoin(question, eq(question.id, answerOption.questionId))
+      .where(eq(question.eventId, eventId)),
+    db
+      .select({
+        participantId: participantAnswer.participantId,
+        questionId: participantAnswer.questionId,
+        optionId: participantAnswer.answerOptionId,
+      })
+      .from(participantAnswer)
+      .innerJoin(participant, eq(participant.id, participantAnswer.participantId))
+      .where(eq(participant.eventId, eventId)),
   ]);
-  return { event: ev, participants, groups: await loadRoundGroups(db, roundRow?.id ?? null) };
+  const labels = new Map(options.map((o) => [o.id, o.label]));
+  const answers = new Map<string, Record<string, string>>();
+  for (const row of answerRows) {
+    answers.set(row.participantId, { ...answers.get(row.participantId), [row.questionId]: row.optionId });
+  }
+  return {
+    event: ev,
+    participants,
+    groups: await loadRoundGroups(db, roundRow?.id ?? null),
+    questions: matching.map((q) => ({
+      ...q,
+      text: texts.find((t) => t.id === q.id)?.text ?? "",
+      labels,
+    })),
+    answers,
+  };
 }

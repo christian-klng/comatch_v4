@@ -116,6 +116,30 @@ describe("matchPool", () => {
     ]);
   });
 
+  it("setzt niemanden in ein Match mit jemandem, den die Person schon getroffen hat", () => {
+    const history = new Map([[pairKey("a", "x"), { timesMet: 1, lastRound: 2 }]]);
+    const result = matchPool(
+      input({
+        history,
+        waiting: [waitingSince(person("a", [0]), DELAY)],
+        openGroups: [
+          group("g1", person("x", [0]), person("y", [0])),
+          group("g2", person("v", [1]), person("w", [1])),
+        ],
+      }),
+    );
+    expect(result.joins.map((j) => j.groupId)).toEqual(["g2"]);
+
+    const blocked = matchPool(
+      input({
+        history,
+        waiting: [waitingSince(person("a", [0]), DELAY)],
+        openGroups: [group("g1", person("x", [0]), person("y", [0]))],
+      }),
+    );
+    expect(blocked).toMatchObject({ joins: [], waiting: ["a"] });
+  });
+
   it("matcht kurz vor Rundenende niemanden mehr", () => {
     const result = matchPool(
       input({
