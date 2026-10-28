@@ -118,7 +118,11 @@ for (let i = 0; i < Number(values.count); i++) {
     // Falsch geraten: nach der Sperre nochmal.
     if (res.result === "wrong") timer = setTimeout(() => void act(res.state).catch(log), 6_000);
   };
-  const log = (err: unknown) => console.log(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+  const log = (err: unknown) => {
+    console.log(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+    // Z. B. während einer Pause abgelehnt: beim nächsten Zustand neu planen.
+    plannedFor = "";
+  };
 
   socket.on("state", (s: ParticipantLive) => {
     if (s.match) botCodes.set(me.id, s.match.ownCode);

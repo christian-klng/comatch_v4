@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 import type { EventStatus, MatchGroupKind } from "@comatch/shared";
 import type { Db } from "../db/client.ts";
 import {
@@ -247,6 +247,7 @@ export interface GroupView {
   status: "open" | "confirmed" | "expired";
   similarity: number;
   createdAt: Date;
+  confirmedAt: Date | null;
   members: {
     participantId: string;
     ownCode: string;
@@ -278,6 +279,7 @@ export async function loadRoundGroups(db: Conn, roundId: string | null): Promise
     status: g.status,
     similarity: g.similarity,
     createdAt: g.createdAt,
+    confirmedAt: g.confirmedAt,
     members: members
       .filter((m) => m.matchGroupId === g.id)
       .map((m) => ({
@@ -305,12 +307,14 @@ export interface LiveSnapshot {
   questions: QuestionView[];
   /** Antworten je Person: questionId → optionId */
   answers: ReadonlyMap<string, Readonly<Record<string, string>>>;
+  /** Bestätigte Matches über alle Runden. */
+  confirmedTotal: number;
 }
 
 export async function loadSnapshot(db: Conn, eventId: string): Promise<LiveSnapshot | null> {
   const ev = await loadLiveEvent(db, eventId);
   if (!ev) return null;
-  const [participants, roundRow, matching, texts, options, answerRows] = await Promise.all([
+  const [participants, roundRow, matching, texts, options, answerRows, [total]] = await Promise.all([
     db.select().from(participant).where(eq(participant.eventId, eventId)),
     currentRoundRow(db, ev),
     loadQuestionsForMatching(db, eventId),
@@ -329,6 +333,10 @@ export async function loadSnapshot(db: Conn, eventId: string): Promise<LiveSnaps
       .from(participantAnswer)
       .innerJoin(participant, eq(participant.id, participantAnswer.participantId))
       .where(eq(participant.eventId, eventId)),
+    db
+      .select({ n: count() })
+      .from(matchGroup)
+      .where(and(eq(matchGroup.eventId, eventId), eq(matchGroup.status, "confirmed"))),
   ]);
   const labels = new Map(options.map((o) => [o.id, o.label]));
   const answers = new Map<string, Record<string, string>>();
@@ -345,5 +353,6 @@ export async function loadSnapshot(db: Conn, eventId: string): Promise<LiveSnaps
       labels,
     })),
     answers,
+    confirmedTotal: total?.n ?? 0,
   };
 }

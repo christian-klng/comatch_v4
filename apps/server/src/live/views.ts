@@ -1,7 +1,9 @@
 import {
   INACTIVE_AFTER_MS,
+  LOBBY_SELFIES_LIMIT,
   MAX_CODE_CHOICES_ATTEMPTS,
   NOT_FOUND_MIN_SEARCH_MS,
+  RECENT_MATCHES_LIMIT,
   WRONG_CODE_LOCK_MS,
   type CommonGround,
   type EventLive,
@@ -39,12 +41,28 @@ export function toClock(ev: LiveEventRow): LiveClock {
 
 export function buildEventLive(
   snapshot: LiveSnapshot,
-  connected: ReadonlySet<string>,
-  now: number,
+  ctx: { connected: ReadonlySet<string>; now: number; media: MediaSigner },
 ): EventLive {
+  const { connected, now, media } = ctx;
   const joined = snapshot.participants.filter(hasJoined);
   const active = joined.filter((p) => p.status !== "inactive" && isPresent(p, connected, now));
   const count = (status: ParticipantRow["status"]) => active.filter((p) => p.status === status).length;
+  const selfieOf = (id: string) => {
+    const key = snapshot.participants.find((p) => p.id === id)?.selfieKey;
+    return key ? media.url(key, now) : null;
+  };
+  const status = snapshot.event.status;
+  // Vor dem Start die neuesten Gesichter, am Ende alle für die Collage; dazwischen braucht es keine.
+  const withSelfie = joined
+    .filter((p) => p.selfieKey)
+    .sort((a, b) => b.joinedAt.getTime() - a.joinedAt.getTime());
+  const selfieList =
+    status === "draft" || status === "open"
+      ? withSelfie.slice(0, LOBBY_SELFIES_LIMIT)
+      : status === "ended"
+        ? withSelfie
+        : [];
+
   return {
     serverNow: now,
     clock: toClock(snapshot.event),
@@ -60,6 +78,17 @@ export function buildEventLive(
       open: snapshot.groups.filter((g) => g.status === "open").length,
       confirmed: snapshot.groups.filter((g) => g.status === "confirmed").length,
     },
+    totals: { confirmedMatches: snapshot.confirmedTotal, rounds: snapshot.event.currentRound },
+    recentConfirmed: snapshot.groups
+      .filter((g) => g.status === "confirmed" && g.confirmedAt)
+      .sort((a, b) => a.confirmedAt!.getTime() - b.confirmedAt!.getTime())
+      .slice(-RECENT_MATCHES_LIMIT)
+      .map((g) => ({
+        id: g.id,
+        selfies: g.members.map((m) => selfieOf(m.participantId)),
+        confirmedAt: g.confirmedAt!.getTime(),
+      })),
+    selfies: selfieList.map((p) => media.url(p.selfieKey!, now)),
   };
 }
 

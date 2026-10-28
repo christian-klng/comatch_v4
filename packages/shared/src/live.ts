@@ -115,4 +115,34 @@ export interface EventLive {
   };
   /** Matches der laufenden Runde. */
   matches: { open: number; confirmed: number };
+  /** Über alle Runden: bestätigte Matches und gestartete Runden (für Leinwand und Abschluss). */
+  totals: { confirmedMatches: number; rounds: number };
+  /**
+   * Bestätigte Matches der laufenden Runde, älteste zuerst (höchstens RECENT_MATCHES_LIMIT).
+   * Die Leinwand animiert alle, die sie noch nicht kennt.
+   */
+  recentConfirmed: ConfirmedMatch[];
+  /**
+   * Selfies (signierte URLs) für die Leinwand: vor dem Start die zuletzt Beigetretenen
+   * (neueste zuerst, höchstens LOBBY_SELFIES_LIMIT), nach dem Ende alle für die Collage, sonst leer.
+   */
+  selfies: string[];
+}
+
+export interface ConfirmedMatch {
+  id: string;
+  selfies: (string | null)[];
+  confirmedAt: number;
+}
+
+export const RECENT_MATCHES_LIMIT = 30;
+export const LOBBY_SELFIES_LIMIT = 24;
+
+/** Statische Angaben für die Leinwand (Abruf mit dem Presenter-Token). */
+export interface PresenterEvent {
+  id: string;
+  title: string;
+  joinUrl: string;
+  logoUrl: string | null;
+  primaryColor: string | null;
 }

@@ -556,7 +556,13 @@ export class LiveEvents {
 
   async eventState(eventId: string): Promise<EventLive | null> {
     const snapshot = await loadSnapshot(this.deps.db, eventId);
-    return snapshot ? buildEventLive(snapshot, this.connectedIds(), this.deps.clock.now()) : null;
+    return snapshot
+      ? buildEventLive(snapshot, {
+          connected: this.connectedIds(),
+          now: this.deps.clock.now(),
+          media: this.deps.media,
+        })
+      : null;
   }
 
   private async sendParticipantState(eventId: string, participantId: string) {
@@ -570,7 +576,7 @@ export class LiveEvents {
     if (!snapshot) return;
     const connected = this.connectedIds();
     const now = this.deps.clock.now();
-    this.emitter.toEvent(eventId, buildEventLive(snapshot, connected, now));
+    this.emitter.toEvent(eventId, buildEventLive(snapshot, { connected, now, media: this.deps.media }));
     for (const [participantId, entry] of this.connections) {
       if (entry.eventId !== eventId) continue;
       const state = buildParticipantLive(snapshot, participantId, { connected, now, media: this.deps.media });

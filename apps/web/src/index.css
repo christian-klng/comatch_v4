@@ -28,3 +28,129 @@ body,
 body {
   @apply bg-slate-950 text-slate-100 antialiased;
 }
+
+/* Leinwand: Selfies fliegen aufeinander zu und docken an (Dauer steuert MatchStage). */
+@keyframes fly-left {
+  0% {
+    transform: translateX(-55vw) rotate(-14deg);
+    opacity: 0;
+  }
+  40% {
+    transform: translateX(0) rotate(-3deg);
+    opacity: 1;
+  }
+  48% {
+    transform: translateX(1vw) rotate(0);
+  }
+  55%,
+  88% {
+    transform: none;
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+
+@keyframes fly-right {
+  0% {
+    transform: translateX(55vw) rotate(14deg);
+    opacity: 0;
+  }
+  40% {
+    transform: translateX(0) rotate(3deg);
+    opacity: 1;
+  }
+  48% {
+    transform: translateX(-1vw) rotate(0);
+  }
+  55%,
+  88% {
+    transform: none;
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+
+@keyframes fly-up {
+  0% {
+    transform: translateY(60vh);
+    opacity: 0;
+  }
+  40% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  55%,
+  88% {
+    transform: none;
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+
+/* Puls beim Andocken */
+@keyframes dock-glow {
+  0%,
+  38% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  45% {
+    box-shadow: 0 0 0 1.2vh var(--color-brand);
+  }
+  70% {
+    box-shadow: 0 0 0 4vh transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* Leinwand: neue Gesichter in der Lobby, Einblendung beim Rundenwechsel */
+@keyframes fade-in-up {
+  from {
+    transform: translateY(3vh) scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes banner {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  12%,
+  85% {
+    transform: none;
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+
+/* Ohne Bewegung (prefers-reduced-motion): nur ein- und ausblenden */
+@keyframes fade-hold {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

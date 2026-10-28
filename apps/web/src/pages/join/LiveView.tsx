@@ -2,28 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { POOL_CUTOFF_MS, type ParticipantLive, type ParticipantMe, type PublicEvent } from "@comatch/shared";
 import { errorMessage } from "../../lib/api.ts";
 import { formatCountdown, useLive, useRemaining } from "../../lib/live.ts";
+import { useWakeLock } from "../../lib/wakeLock.ts";
 import { ConfirmedScreen, MatchScreen } from "./MatchScreen.tsx";
 import { Message, PrimaryButton, SecondaryButton } from "./parts.tsx";
-
-/** Hält den Bildschirm wach, solange die Live-Ansicht offen ist (wo der Browser das kann). */
-function useWakeLock() {
-  useEffect(() => {
-    let lock: WakeLockSentinel | null = null;
-    const request = () => {
-      if (document.visibilityState !== "visible" || !("wakeLock" in navigator)) return;
-      navigator.wakeLock
-        .request("screen")
-        .then((l) => (lock = l))
-        .catch(() => {});
-    };
-    request();
-    document.addEventListener("visibilitychange", request);
-    return () => {
-      document.removeEventListener("visibilitychange", request);
-      void lock?.release().catch(() => {});
-    };
-  }, []);
-}
 
 /** Kurz vibrieren, sobald ein neues Match da ist, und doppelt, wenn es bestätigt ist. */
 function useVibrate(state: ParticipantLive | null) {

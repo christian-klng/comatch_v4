@@ -15,6 +15,7 @@ import { healthRoutes } from "./routes/health.ts";
 import { inviteRoutes } from "./routes/invites.ts";
 import { mediaRoutes } from "./routes/media.ts";
 import { participantRoutes } from "./routes/participant.ts";
+import { presentRoutes } from "./routes/present.ts";
 import { publicEventRoutes } from "./routes/public-events.ts";
 
 export interface AppOptions extends AppContext {
@@ -48,6 +49,7 @@ export async function buildApp(options: AppOptions) {
       await api.register(inviteRoutes, context);
       await api.register(publicEventRoutes, context);
       await api.register(mediaRoutes, context);
+      await api.register(presentRoutes, context);
       await api.register(participantRoutes, { ...context, prefix: "/participant" });
 
       await api.register(

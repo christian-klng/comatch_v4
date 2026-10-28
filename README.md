@@ -2,7 +2,7 @@
 
 Live-Matchmaking für Gründer*innen auf Präsenzveranstaltungen. Gesamtplan und Entscheidungen: [PLAN.md](PLAN.md).
 
-**Stand:** M5 fertig. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3), die Runden laufen automatisch und live per Socket.IO (M4). Jetzt ist der Spielablauf am Handy komplett: Selfie des Gegenübers mit Gemeinsamkeiten, gegenseitige Bestätigung per Code mit Ködern, Fehlversuche und „Nicht gefunden“ (M5). Die Leinwand (M6) folgt.
+**Stand:** M6 fertig. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3), die Runden laufen automatisch und live per Socket.IO (M4), der Spielablauf am Handy mit Codes, Ködern und „Nicht gefunden“ ist komplett (M5). Jetzt gibt es die Leinwand für den Beamer: Lobby mit QR-Code und Gesichtern, großer Countdown, Match-Animationen mit Warteschlange, Rundenwechsel und Abschlussfolie mit Collage (M6). Als Nächstes: erweiterte Live-Steuerung, Statistik und CSV (M7).
 
 ## Voraussetzungen
 
@@ -82,6 +82,11 @@ packages/
   - Verlässt jemand ein Match (Austritt), kommt das Gegenüber ohne Wartezeit zurück in den Pool. Im Pool kommt niemand zu jemandem, den die Person schon getroffen hat.
   - Beim Herunterfahren schließt der Server nur die Transporte, damit sich Clients nach einem Neustart selbst neu verbinden. Clients verbinden sich auch nach einer Trennung durch den Server neu, außer ihre Sitzung wurde abgelehnt.
   - Uhr und Timer sind austauschbar (`createManualClock`), dadurch laufen Rundenwechsel in den Tests ohne Warten.
+- **Leinwand** (`apps/web/src/pages/present`, Link aus der Moderation unter „QR-Code & Links“):
+  - Läuft ohne Login mit dem Presenter-Token aus dem Link. `GET /api/present/:eventId?token=…` liefert Titel, Logo, Farbe und Beitrittslink; alles Weitere kommt per Socket.IO im selben Zustand wie für Admins.
+  - Der Zustand enthält zusätzlich die Summen über alle Runden, die bestätigten Matches der laufenden Runde mit Selfies (höchstens 30) und Selfies für Lobby (die 24 neuesten) und Abschluss (alle). Während der Runden gehen keine Selfie-Listen mit.
+  - Animationen: Die Leinwand spielt jedes Match ab, dessen ID sie noch nicht kennt („Snapshot statt Delta“, kein eigenes Ereignis). Beim Öffnen oder Neuladen wird nichts nachgespielt. Bei vielen Bestätigungen kommen bis zu drei Matches gleichzeitig auf die Bühne. Konfetti per `canvas-confetti`; mit „Bewegung reduzieren“ nur Ein- und Ausblenden.
+  - Größen in `vh`/`vw`, damit die Ansicht auf jedem Beamer gleich aussieht; Countdown in den letzten 10 s betont. Die Abschlusscollage berechnet die Kachelgröße so, dass alle Selfies ohne Scrollen passen.
 - **Bestätigung** (`apps/server/src/live/codes.ts`, `confirm.ts`):
   - Codes sind dreistellige Zahlen mit verschiedenen Ziffern ohne führende Null. Emoji + Wort (Plan, offene Frage) ist bewusst noch nicht gebaut; das Format steckt nur in `codes.ts`.
   - Zur Auswahl stehen der richtige Code und zwei Köder: einer mit vertauschten Ziffern, einer mit einer anderen Ziffer. Köder sind gespeichert und die Reihenfolge ist stabil, damit Neuladen nichts verrät; nach jeder falschen Wahl wird neu gemischt.
