@@ -2,7 +2,7 @@
 
 Live-Matchmaking für Gründer*innen auf Präsenzveranstaltungen. Gesamtplan und Entscheidungen: [PLAN.md](PLAN.md).
 
-**Stand:** M9 fertig, alle Meilensteine aus dem Plan sind umgesetzt. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3), die Runden laufen live per Socket.IO (M4), der Spielablauf am Handy ist komplett (M5), die Leinwand läuft (M6), die Moderation hat volle Kontrolle (M7), alles ist unter Last getestet (M8). Mit M9 kommen automatische Löschung, Impressum und Datenschutzerklärung sowie das Produktiv-Setup mit Caddy und täglichen Sicherungen. **Inbetriebnahme:** [deploy/DEPLOY.md](deploy/DEPLOY.md).
+**Stand:** M9 fertig, alle Meilensteine aus dem Plan sind umgesetzt. Admins konfigurieren Events (M1), Teilnehmende treten per QR-Code bei (M2), die Matching-Engine paart (M3), die Runden laufen live per Socket.IO (M4), der Spielablauf am Handy ist komplett (M5), die Leinwand läuft (M6), die Moderation hat volle Kontrolle (M7), alles ist unter Last getestet (M8). Mit M9 kommen automatische Löschung, Impressum und Datenschutzerklärung sowie das Produktiv-Setup mit Caddy und täglichen Sicherungen. **Inbetriebnahme:** mit Coolify nach [deploy/COOLIFY.md](deploy/COOLIFY.md), auf einem eigenen Server nach [deploy/DEPLOY.md](deploy/DEPLOY.md).
 
 ## Voraussetzungen
 
@@ -37,7 +37,8 @@ apps/
   web/      React + Vite + Tailwind (Admin, Präsentation, Teilnehmende)
 packages/
   shared/   gemeinsame Typen, Statuswerte, Zod-Schemas, Zeit-Sync
-deploy/     Produktivbetrieb: Compose mit Caddy, Backups, Anleitung (DEPLOY.md)
+deploy/     Produktivbetrieb: Compose mit Caddy, Backups, Anleitungen (COOLIFY.md, DEPLOY.md)
+docker-compose.coolify.yml   Deployment mit Coolify
 ```
 
 ## Skripte
@@ -110,7 +111,9 @@ deploy/     Produktivbetrieb: Compose mit Caddy, Backups, Anleitung (DEPLOY.md)
 - **Löschfristen** (`apps/server/src/events/retention.ts`): Selfies und Sitzungen werden `RETENTION_HOURS` (Standard 24) nach Eventende gelöscht; geprüft beim Start und alle 10 Minuten. Antworten und Matches bleiben für die Statistik, ohne Foto und Sitzung sind sie keiner Person mehr zuzuordnen. Events, die eine Woche ohne Aktivität offen stehen, werden automatisch beendet. Admins können die Fotos eines beendeten Events auch sofort löschen.
 - **Impressum und Datenschutzerklärung** unter `/impressum` und `/datenschutz`, Betreiber-Angaben aus `LEGAL_*` (`GET /api/legal`). Der Text der Datenschutzerklärung ist ein Entwurf, der das tatsächliche Verhalten der App beschreibt; vor dem Launch mit der Datenschutzberatung abstimmen. Die Einwilligung beim Selfie nennt die Löschfrist und verlinkt die Erklärung.
 - **Logs** enthalten keine IP-Adressen und keine Query-Strings (dort stünden Presenter-Token und Bild-Signaturen); der Health-Check wird nicht geloggt.
-- **Produktiv-Setup** (`deploy/`): Caddy mit automatischem HTTPS, HSTS und strenger Content-Security-Policy (alles vom eigenen Server; Inline-Styles erlaubt, die React für dynamische Farben braucht). App und Postgres sind nur intern erreichbar; `TRUST_PROXY` ist nur dort an. Logs aller Dienste auf 5 × 10 MB begrenzt. Der Dienst `backup` sichert die Datenbank täglich mit 7 Tagen Aufbewahrung; `deploy/restore.sh` stellt wieder her.
+- **Sicherheits-Header** setzt die App selbst (`apps/server/src/lib/security-headers.ts`), damit sie hinter jedem Proxy gelten: strenge Content-Security-Policy (alles vom eigenen Server; Inline-Styles erlaubt, die React für dynamische Farben braucht), HSTS unter HTTPS.
+- **Coolify** (`docker-compose.coolify.yml`, [deploy/COOLIFY.md](deploy/COOLIFY.md)): Build Pack „Docker Compose“ mit App, Postgres und Backup. HTTPS und Routing kommen von Coolify, Passwörter und Adresse aus den `SERVICE_*`-Variablen, Pflichtangaben blockieren das Deployment, bis sie ausgefüllt sind.
+- **Produktiv-Setup ohne Coolify** (`deploy/`): Caddy mit automatischem HTTPS. App und Postgres sind nur intern erreichbar; `TRUST_PROXY` ist nur dort an. Logs aller Dienste auf 5 × 10 MB begrenzt. Der Dienst `backup` sichert die Datenbank täglich mit 7 Tagen Aufbewahrung; `deploy/restore.sh` stellt wieder her.
 - Lokal geprüft: kompletter Produktions-Stack mit Caddy, Beitritt mit Selfie, Leinwand mit Match-Animation unter der CSP ohne Konsolenfehler, Admin-Konto per Befehl, Login über HTTPS, Sicherung und Wiederherstellung.
 
 ## Lasttest (M8)

@@ -16,7 +16,7 @@ const envSchema = z.object({
   PUBLIC_BASE_URL: z.url().default("http://localhost:5173"),
   /** Pfad zum gebauten Web-Frontend; wird in Produktion statisch ausgeliefert. */
   WEB_DIST_DIR: z.string().optional(),
-  /** Session-Cookie nur über HTTPS senden. Standard: an in Produktion. */
+  /** Session-Cookie nur über HTTPS senden. Standard: an in Produktion, wenn die App unter HTTPS läuft. */
   COOKIE_SECURE: z.stringbool().optional(),
 
   /** S3-kompatibler Bild-Speicher für Selfies (lokal RustFS, in Produktion Hetzner Object Storage). */
@@ -64,6 +64,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   return {
     ...result.data,
-    COOKIE_SECURE: result.data.COOKIE_SECURE ?? result.data.NODE_ENV === "production",
+    // Ohne Schrägstrich am Ende, sonst entstehen Links wie https://domain//e/abc.
+    PUBLIC_BASE_URL: result.data.PUBLIC_BASE_URL.replace(/\/+$/, ""),
+    COOKIE_SECURE:
+      result.data.COOKIE_SECURE ??
+      (result.data.NODE_ENV === "production" && result.data.PUBLIC_BASE_URL.startsWith("https://")),
   };
 }

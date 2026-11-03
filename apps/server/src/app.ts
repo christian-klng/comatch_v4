@@ -8,6 +8,7 @@ import Fastify, { type FastifyServerOptions } from "fastify";
 import { requireAdmin } from "./auth/session.ts";
 import type { AppContext } from "./context.ts";
 import { errorHandler, HttpError } from "./lib/errors.ts";
+import { securityHeaders } from "./lib/security-headers.ts";
 import { adminEventRoutes } from "./routes/admin-events.ts";
 import { adminTeamRoutes } from "./routes/admin-team.ts";
 import { authRoutes } from "./routes/auth.ts";
@@ -31,6 +32,11 @@ export interface AppOptions extends AppContext {
 export async function buildApp(options: AppOptions) {
   const { logger, webDistDir, pingDb, trustProxy = false, ...context } = options;
   const app = Fastify({ logger: logger ?? false, trustProxy });
+
+  const headers = securityHeaders(context.publicBaseUrl);
+  app.addHook("onSend", async (_request, reply) => {
+    reply.headers(headers);
+  });
 
   app.decorateRequest("admin", null);
   app.decorateRequest("participant", null);

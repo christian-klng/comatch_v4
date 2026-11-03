@@ -9,7 +9,9 @@ COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
-RUN npm ci
+# --include=dev: Der Web-Build braucht Vite und Tailwind, auch wenn die Plattform (z. B. Coolify)
+# beim Bauen NODE_ENV=production setzt.
+RUN npm ci --include=dev
 
 FROM deps AS build
 COPY . .

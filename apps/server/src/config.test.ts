@@ -30,6 +30,28 @@ describe("loadConfig", () => {
     expect(config.TRUST_PROXY).toBe(true);
   });
 
+  it("leitet das Secure-Cookie aus der Adresse ab und entfernt den Schrägstrich am Ende", () => {
+    const https = loadConfig({
+      ...base,
+      NODE_ENV: "production",
+      PUBLIC_BASE_URL: "https://match.example.de/",
+    });
+    expect(https.PUBLIC_BASE_URL).toBe("https://match.example.de");
+    expect(https.COOKIE_SECURE).toBe(true);
+
+    // Coolifys Test-Domain (sslip.io) läuft ohne HTTPS; sonst wäre keine Anmeldung möglich.
+    const http = loadConfig({ ...base, NODE_ENV: "production", PUBLIC_BASE_URL: "http://1-2-3-4.sslip.io" });
+    expect(http.COOKIE_SECURE).toBe(false);
+
+    const forced = loadConfig({
+      ...base,
+      NODE_ENV: "production",
+      PUBLIC_BASE_URL: "http://1-2-3-4.sslip.io",
+      COOKIE_SECURE: "true",
+    });
+    expect(forced.COOKIE_SECURE).toBe(true);
+  });
+
   it("lehnt eine ungültige E-Mail ab", () => {
     expect(() => loadConfig({ ...base, LEGAL_EMAIL: "keine-mail" })).toThrow(/LEGAL_EMAIL/);
   });

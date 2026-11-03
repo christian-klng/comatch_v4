@@ -26,6 +26,9 @@ export function createS3Storage(options: S3Options): Storage & { ensureBucket():
     credentials: { accessKeyId: options.accessKeyId, secretAccessKey: options.secretAccessKey },
     // Hetzner und der lokale Emulator erwarten den Bucket im Pfad, nicht als Subdomain.
     forcePathStyle: true,
+    // Neuere SDKs senden sonst immer eigene Prüfsummen, die S3-kompatible Speicher ablehnen können.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
   const Bucket = options.bucket;
 

@@ -1,0 +1,104 @@
+# Deployment mit Coolify (Build Pack „Docker Compose“), Anleitung: deploy/COOLIFY.md
+#   Base Directory: /
+#   Docker Compose Location: /docker-compose.coolify.yml
+#
+# Coolify stellt HTTPS und das Routing bereit und erzeugt die SERVICE_*-Werte selbst. Variablen
+# mit :? sind Pflicht, Coolify blockiert das Deployment, bis sie ausgefüllt sind. Bewusst ohne
+# ports: Eingehender Verkehr läuft nur über den Proxy von Coolify.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # Zeit für das saubere Herunterfahren (laufende DB-Arbeit abwarten).
+    stop_grace_period: 15s
+    environment:
+      # Domain der App, Port 3000 im Container (unter „Domains“ auf die eigene Domain ändern).
+      - SERVICE_URL_APP_3000
+      - PUBLIC_BASE_URL=${SERVICE_URL_APP}
+      - DATABASE_URL=postgres://comatch:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/comatch
+      # Fest, damit Bild-Links einen Neustart überstehen.
+      - MEDIA_SIGNING_SECRET=${SERVICE_PASSWORD_64_MEDIA}
+      # Hinter dem Proxy von Coolify: X-Forwarded-For ist vertrauenswürdig (Rate-Limits je IP).
+      - TRUST_PROXY=true
+      # Selfies: S3-kompatibler Speicher, z. B. Hetzner Object Storage.
+      - S3_ENDPOINT=${S3_ENDPOINT:?}
+      - S3_REGION=${S3_REGION:-fsn1}
+      - S3_BUCKET=${S3_BUCKET:?}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:?}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:?}
+      # Stunden nach Eventende, bis Selfies und Sitzungen gelöscht werden.
+      - RETENTION_HOURS=${RETENTION_HOURS:-24}
+      # Impressum und Datenschutzerklärung.
+      - LEGAL_NAME=${LEGAL_NAME:?}
+      - LEGAL_ADDRESS=${LEGAL_ADDRESS:?}
+      - LEGAL_EMAIL=${LEGAL_EMAIL:?}
+      - LEGAL_PHONE=${LEGAL_PHONE:-}
+      - LEGAL_DPO=${LEGAL_DPO:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Logs werden fortlaufend überschrieben (so in der Datenschutzerklärung zugesagt).
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=comatch
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=comatch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comatch -d comatch"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  # Tägliche Sicherung der Datenbank, 7 Tage Aufbewahrung (deploy/backup.sh).
+  backup:
+    build:
+      context: .
+      dockerfile: deploy/backup.Dockerfile
+    restart: unless-stopped
+    environment:
+      - PGHOST=postgres
+      - PGUSER=comatch
+      - PGPASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - PGDATABASE=comatch
+    volumes:
+      - backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  pgdata:
+  backups:

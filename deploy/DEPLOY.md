@@ -1,5 +1,7 @@
 # CoMatch in Betrieb nehmen (Hetzner)
 
+Diese Anleitung gilt für einen eigenen Server ohne Plattform. Mit Coolify: siehe [COOLIFY.md](COOLIFY.md).
+
 Ein Server reicht für Events bis 100 Teilnehmende mit großem Puffer (Lasttest: 200 Clients, siehe README). Alles läuft per Docker Compose: Caddy (HTTPS), App, Postgres und ein Backup-Dienst. Selfies liegen im Hetzner Object Storage.
 
 ## 1. Einmalig vorbereiten
