@@ -1,4 +1,4 @@
-/** Ablage für Selfies. In Produktion S3-kompatibel (Hetzner Object Storage), in Tests im Speicher. */
+/** Ablage für Selfies: in der Datenbank (Standard) oder S3-kompatibel, in Tests im Arbeitsspeicher. */
 export interface Storage {
   put(key: string, data: Buffer, contentType: string): Promise<void>;
   /** Liefert null, wenn es den Schlüssel nicht gibt. */

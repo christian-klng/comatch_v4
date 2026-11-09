@@ -1,15 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { legalInfo, loadConfig } from "./config.ts";
+import { legalInfo, loadConfig, s3Options } from "./config.ts";
 
-const base = {
-  DATABASE_URL: "postgres://u:p@localhost:5432/db",
-  S3_ENDPOINT: "http://localhost:9000",
-  S3_BUCKET: "b",
-  S3_ACCESS_KEY_ID: "k",
-  S3_SECRET_ACCESS_KEY: "s",
-};
+const base = { DATABASE_URL: "postgres://u:p@localhost:5432/db" };
 
 describe("loadConfig", () => {
+  it("legt Selfies ohne S3_ENDPOINT in die Datenbank, auch bei leeren S3-Werten", () => {
+    expect(s3Options(loadConfig(base))).toBeNull();
+    expect(s3Options(loadConfig({ ...base, S3_ENDPOINT: "", S3_BUCKET: "", S3_REGION: "" }))).toBeNull();
+  });
+
+  it("nutzt S3, wenn der Endpunkt gesetzt ist, und verlangt dann Bucket und Schlüssel", () => {
+    const s3 = { S3_ENDPOINT: "http://localhost:9000", S3_BUCKET: "b", S3_ACCESS_KEY_ID: "k" };
+    expect(() => loadConfig({ ...base, ...s3 })).toThrow(/S3_SECRET_ACCESS_KEY/);
+    expect(s3Options(loadConfig({ ...base, ...s3, S3_SECRET_ACCESS_KEY: "s" }))).toEqual({
+      endpoint: "http://localhost:9000",
+      region: "fsn1",
+      bucket: "b",
+      accessKeyId: "k",
+      secretAccessKey: "s",
+    });
+  });
+
   it("behandelt leere optionale Werte wie nicht gesetzt (Docker Compose reicht sie leer durch)", () => {
     const config = loadConfig({ ...base, LEGAL_NAME: "", LEGAL_EMAIL: "", LEGAL_PHONE: " " });
     expect(legalInfo(config)).toMatchObject({ configured: false, name: null, email: null, phone: null });

@@ -7,7 +7,7 @@ Live-Matchmaking für Gründer*innen auf Präsenzveranstaltungen. Gesamtplan und
 ## Voraussetzungen
 
 - Node.js 24 (siehe `.nvmrc`)
-- Docker (für Postgres und den S3-Emulator)
+- Docker (für Postgres und den S3-Emulator für Tests)
 
 ## Schnellstart
 
@@ -58,7 +58,7 @@ docker-compose.coolify.yml   Deployment mit Coolify
 | `npm run simulate -w @comatch/server -- --people 100 --rounds 8`                          | Matching-Simulation: Übereinstimmung, Wiederholungen, Laufzeit je Runde                                                                                                                                                                                                                               |
 | `npm run bots -w @comatch/server -- --event <code> --count 5 --url http://localhost:5173` | Simulierte Teilnehmende: treten bei, laden ein Selfie hoch, bestätigen ihr Match nach 8–40 s (`--confirm 8-40`); Codes echter Personen raten sie. Mit `--not-found 0.2` drückt ein Teil „Nicht gefunden“                                                                                              |
 | `npm run loadtest -w @comatch/server -- --url http://localhost:3000 --count 200`          | Lasttest: legt ein Event an, lässt Bots beitreten und spielt Runden durch; misst Antwortzeiten, Latenz bis zum Match, Socket-Datenmenge und Event-Loop. `--flaky` simuliert schwaches WLAN (Verzögerung, Abbrüche), `--restart` wartet nach Runde 1 auf einen Server-Neustart. Braucht `SEED_ADMIN_*` |
-| `docker compose --profile full up -d`                                                     | Produktions-Container + Postgres + S3 auf <http://localhost:3000>                                                                                                                                                                                                                                     |
+| `docker compose --profile full up -d`                                                     | Produktions-Container + Postgres auf <http://localhost:3000>                                                                                                                                                                                                                                          |
 
 ## Technische Entscheidungen
 
@@ -67,10 +67,10 @@ docker-compose.coolify.yml   Deployment mit Coolify
 - **TypeScript 6.0** statt 7: typescript-eslint unterstützt TypeScript 7 noch nicht.
 - **Statuswerte** stehen einmal in `packages/shared/src/domain.ts` und werden für die Postgres-Enums wiederverwendet.
 - Der Server-Port heißt **`API_PORT`** (nicht `PORT`), weil Tools wie die Vorschau `PORT` für den Vite-Server setzen.
-- **Server-Tests** laufen gegen die eigene Datenbank `comatch_test` im selben Postgres-Container; sie wird automatisch angelegt und vor jedem Test geleert. Routen-Tests speichern Bilder im Arbeitsspeicher, ein eigener Test prüft den S3-Speicher gegen RustFS.
+- **Server-Tests** laufen gegen die eigene Datenbank `comatch_test` im selben Postgres-Container; sie wird automatisch angelegt und vor jedem Test geleert. Routen-Tests speichern Bilder im Arbeitsspeicher. Dieselben Speicher-Tests laufen auch gegen Postgres und gegen RustFS (S3).
 - **Admin-Sessions** liegen in Postgres (Cookie `comatch_admin`, httpOnly, 14 Tage). Neue Admins kommen nur per Einladungslink dazu.
 - **Logos** liegen klein (≤ 512 KB) direkt in Postgres.
-- **Selfies** liegen in einem S3-Bucket: lokal in RustFS (das MinIO-Image wird nicht mehr veröffentlicht), in Produktion in Hetzner Object Storage. Das Handy schneidet das Foto auf 3:4 zu, verkleinert es auf 540×720 und kodiert es neu als JPEG (das entfernt auch den Aufnahmeort). Hochgeladen wird über den Server, nicht direkt in den Bucket. So bleibt der Bucket privat und braucht keine CORS-Regeln.
+- **Selfies** liegen in Postgres (Tabelle `media_object`, etwa 100 KB pro Foto, rund 10 MB pro Event mit 100 Personen). Optional in einem S3-Bucket, z. B. Hetzner Object Storage: Das geschieht, sobald `S3_ENDPOINT` gesetzt ist (lokal zum Ausprobieren RustFS, das MinIO-Image wird nicht mehr veröffentlicht). Das Handy schneidet das Foto auf 3:4 zu, verkleinert es auf 540×720 und kodiert es neu als JPEG (das entfernt auch den Aufnahmeort). Hochgeladen und ausgeliefert wird immer über den Server, ein Bucket bleibt also privat und braucht keine CORS-Regeln. Die tägliche Sicherung enthält die Fotos nicht.
 - **Bilder ausliefern:** Selfies sind nur über signierte URLs erreichbar (`/api/media/…?exp=…&sig=…`, etwa 1 Stunde gültig). Ohne `MEDIA_SIGNING_SECRET` erzeugt der Server bei jedem Start ein neues Geheimnis, alte Links verfallen dann.
 - **Teilnehmende** bekommen beim Beitritt ein Sitzungstoken. Es liegt im `localStorage` des Handys und wird als Bearer-Token gesendet; in der DB steht nur der Hash. Nach Neuladen oder gesperrtem Handy geht es dadurch an derselben Stelle weiter.
 - **Code-Splitting:** Der Admin-Bereich ist ein eigener Chunk, damit Handys im Event-WLAN weniger laden.

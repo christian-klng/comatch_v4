@@ -283,3 +283,19 @@ export const pairHistory = pgTable(
     check("pair_history_ordered", sql`${t.participantA} < ${t.participantB}`),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// Bild-Speicher (Selfies), wenn kein S3 eingerichtet ist
+// ---------------------------------------------------------------------------
+
+/**
+ * Ablage wie ein S3-Bucket: Schlüssel wie `events/<id>/selfies/<person>/<datei>.jpg`.
+ * Bewusst ohne Fremdschlüssel, gelöscht wird über das Präfix (siehe storage/postgres.ts).
+ * Die Sicherung lässt den Inhalt dieser Tabelle aus (deploy/backup.sh).
+ */
+export const mediaObject = pgTable("media_object", {
+  key: text().primaryKey(),
+  contentType: text().notNull(),
+  data: bytea().notNull(),
+  createdAt: createdAt(),
+});

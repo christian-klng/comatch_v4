@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { LegalInfo } from "@comatch/shared";
+import type { S3Options } from "./storage/s3.ts";
 
 /** Leere Werte (z. B. `LEGAL_PHONE=` aus Docker Compose) gelten als nicht gesetzt. */
 const optionalText = <T extends z.ZodType>(schema: T) =>
@@ -19,12 +20,15 @@ const envSchema = z.object({
   /** Session-Cookie nur über HTTPS senden. Standard: an in Produktion, wenn die App unter HTTPS läuft. */
   COOKIE_SECURE: z.stringbool().optional(),
 
-  /** S3-kompatibler Bild-Speicher für Selfies (lokal RustFS, in Produktion Hetzner Object Storage). */
-  S3_ENDPOINT: z.url(),
-  S3_REGION: z.string().default("fsn1"),
-  S3_BUCKET: z.string().min(1),
-  S3_ACCESS_KEY_ID: z.string().min(1),
-  S3_SECRET_ACCESS_KEY: z.string().min(1),
+  /**
+   * Optional: S3-kompatibler Bild-Speicher für Selfies (z. B. Hetzner Object Storage).
+   * Ohne S3_ENDPOINT liegen die Selfies in der Datenbank.
+   */
+  S3_ENDPOINT: optionalText(z.url()),
+  S3_REGION: optionalText(z.string()),
+  S3_BUCKET: optionalText(z.string()),
+  S3_ACCESS_KEY_ID: optionalText(z.string()),
+  S3_SECRET_ACCESS_KEY: optionalText(z.string()),
   /** Schlüssel für signierte Bild-URLs. Ohne Angabe zufällig je Serverstart (alte URLs verfallen dann). */
   MEDIA_SIGNING_SECRET: z.string().min(32).optional(),
 
@@ -57,8 +61,25 @@ export function legalInfo(config: Config): LegalInfo {
   };
 }
 
+/** Zugangsdaten für S3, oder null, wenn die Selfies in der Datenbank liegen. */
+export function s3Options(config: Config): S3Options | null {
+  if (!config.S3_ENDPOINT) return null;
+  return {
+    endpoint: config.S3_ENDPOINT,
+    region: config.S3_REGION ?? "fsn1",
+    bucket: config.S3_BUCKET!,
+    accessKeyId: config.S3_ACCESS_KEY_ID!,
+    secretAccessKey: config.S3_SECRET_ACCESS_KEY!,
+  };
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const result = envSchema.safeParse(env);
+  const result = envSchema
+    .refine((c) => !c.S3_ENDPOINT || (c.S3_BUCKET && c.S3_ACCESS_KEY_ID && c.S3_SECRET_ACCESS_KEY), {
+      message: "Mit S3_ENDPOINT sind auch S3_BUCKET, S3_ACCESS_KEY_ID und S3_SECRET_ACCESS_KEY nötig.",
+      path: ["S3_ENDPOINT"],
+    })
+    .safeParse(env);
   if (!result.success) {
     throw new Error(`Ungültige Umgebungsvariablen:\n${z.prettifyError(result.error)}`);
   }

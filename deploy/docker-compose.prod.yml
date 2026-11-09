@@ -1,7 +1,7 @@
 # Produktivbetrieb auf einem Server (z. B. Hetzner Cloud), siehe deploy/DEPLOY.md.
 #   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
-# Caddy terminiert HTTPS, die App ist nur intern erreichbar. Selfies liegen im Hetzner
-# Object Storage (S3_* in deploy/.env), die Datenbank in Postgres mit täglicher Sicherung.
+# Caddy terminiert HTTPS, die App ist nur intern erreichbar. Daten und Selfies liegen in Postgres
+# mit täglicher Sicherung (ohne Selfies). Optional Selfies in S3 (S3_* in deploy/.env).
 
 # Logs begrenzen: werden fortlaufend überschrieben (so in der Datenschutzerklärung zugesagt).
 x-logging: &logging
@@ -40,11 +40,12 @@ services:
       PUBLIC_BASE_URL: https://${DOMAIN}
       # Hinter Caddy: X-Forwarded-For ist vertrauenswürdig (für Rate-Limits je IP).
       TRUST_PROXY: "true"
-      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT fehlt}
-      S3_REGION: ${S3_REGION:-fsn1}
-      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET fehlt}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID fehlt}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY fehlt}
+      # Leer: Selfies in der Datenbank.
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       # Fest, damit Bild-Links einen Neustart überstehen.
       MEDIA_SIGNING_SECRET: ${MEDIA_SIGNING_SECRET:?MEDIA_SIGNING_SECRET fehlt}
       RETENTION_HOURS: ${RETENTION_HOURS:-24}

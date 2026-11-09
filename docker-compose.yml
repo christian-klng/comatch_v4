@@ -1,5 +1,6 @@
 # Lokale Entwicklung.
 #   npm run db:up                      → Postgres + S3-Emulator (App läuft per `npm run dev` auf dem Host)
+#                                        Der Emulator ist nur für den S3-Test und optionalen S3-Betrieb nötig.
 #   docker compose --profile full up   → Postgres + App als Produktions-Container auf http://localhost:3000
 services:
   postgres:
@@ -19,7 +20,7 @@ services:
       timeout: 3s
       retries: 20
 
-  # S3-kompatibler Speicher für Selfies, lokal statt Hetzner Object Storage.
+  # S3-kompatibler Speicher, lokal statt Hetzner Object Storage (für den S3-Test; Selfies liegen sonst in Postgres).
   s3:
     image: rustfs/rustfs:1.0.4
     environment:
@@ -47,17 +48,11 @@ services:
       PUBLIC_BASE_URL: http://localhost:${APP_PORT:-3000}
       # Lokal ohne HTTPS; in Produktion hinter Caddy bleibt das Cookie "Secure".
       COOKIE_SECURE: "false"
-      S3_ENDPOINT: http://s3:9000
-      S3_BUCKET: comatch-selfies
-      S3_ACCESS_KEY_ID: comatch
-      S3_SECRET_ACCESS_KEY: comatch-dev-secret
     ports:
       # Host-Port per APP_PORT änderbar, falls 3000 belegt ist.
       - "${APP_PORT:-3000}:3000"
     depends_on:
       postgres:
-        condition: service_healthy
-      s3:
         condition: service_healthy
 
 volumes:

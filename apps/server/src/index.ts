@@ -1,5 +1,5 @@
 import { buildApp } from "./app.ts";
-import { legalInfo, loadConfig } from "./config.ts";
+import { legalInfo, loadConfig, s3Options } from "./config.ts";
 import { createDb } from "./db/client.ts";
 import { runMigrations } from "./db/migrate.ts";
 import { RETENTION_CHECK_MS, runRetention } from "./events/retention.ts";
@@ -8,21 +8,22 @@ import { randomToken } from "./lib/tokens.ts";
 import { systemClock } from "./live/clock.ts";
 import { LiveEvents } from "./live/runtime.ts";
 import { attachRealtime } from "./realtime/socket.ts";
+import { createPostgresStorage } from "./storage/postgres.ts";
 import { createS3Storage } from "./storage/s3.ts";
+import type { Storage } from "./storage/storage.ts";
 
 const config = loadConfig();
 const { db, sql } = createDb(config.DATABASE_URL);
 
 await runMigrations(db);
 
-const storage = createS3Storage({
-  endpoint: config.S3_ENDPOINT,
-  region: config.S3_REGION,
-  bucket: config.S3_BUCKET,
-  accessKeyId: config.S3_ACCESS_KEY_ID,
-  secretAccessKey: config.S3_SECRET_ACCESS_KEY,
-});
-await storage.ensureBucket();
+const s3 = s3Options(config);
+let storage: Storage = createPostgresStorage(db);
+if (s3) {
+  const bucket = createS3Storage(s3);
+  await bucket.ensureBucket();
+  storage = bucket;
+}
 
 const media = createMediaSigner(config.MEDIA_SIGNING_SECRET ?? randomToken(32));
 const live = new LiveEvents({ db, media, clock: systemClock });
@@ -61,6 +62,7 @@ const app = await buildApp({
 
 const io = attachRealtime(app.server, { db, live });
 live.setLogger(app.log);
+app.log.info(s3 ? `Selfies liegen im S3-Bucket ${s3.bucket}` : "Selfies liegen in der Datenbank");
 
 // Beim Herunterfahren gebraucht, gesetzt erst nach dem Start (Signal kann vorher kommen).
 const timers: { retention?: ReturnType<typeof setInterval> } = {};

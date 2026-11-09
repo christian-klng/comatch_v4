@@ -1,6 +1,6 @@
 # CoMatch mit Coolify betreiben
 
-Coolify baut die App aus dem Git-Repository, stellt HTTPS und das Routing bereit und erzeugt die Passwörter selbst. Grundlage ist [docker-compose.coolify.yml](../docker-compose.coolify.yml) mit drei Diensten: App, Postgres und Backup. Selfies liegen in einem S3-Speicher außerhalb von Coolify.
+Coolify baut die App aus dem Git-Repository, stellt HTTPS und das Routing bereit und erzeugt die Passwörter selbst. Grundlage ist [docker-compose.coolify.yml](../docker-compose.coolify.yml) mit drei Diensten: App, Postgres und Backup. Selfies liegen in der Datenbank, ein externer Speicher ist nicht nötig.
 
 Ohne Coolify: siehe [DEPLOY.md](DEPLOY.md). Das Probe-Event dort gilt für beide Wege.
 
@@ -8,8 +8,7 @@ Ohne Coolify: siehe [DEPLOY.md](DEPLOY.md). Das Probe-Event dort gilt für beide
 
 - [ ] **Server** in Coolify eingerichtet, mit laufendem Proxy (Traefik oder Caddy). Für CoMatch reichen 2 vCPU und 4 GB, der Build braucht kurz mehr Speicher.
 - [ ] **Domain:** DNS-A-Eintrag (und AAAA für IPv6), z. B. `match.example.de`, zeigt auf den Coolify-Server.
-- [ ] **S3-Speicher:** Bucket anlegen (privat) und Zugangsschlüssel erzeugen. Bei Hetzner Object Storage: Cloud Console → Object Storage, Endpunkt z. B. `https://fsn1.your-objectstorage.com`.
-- [ ] **AV-Verträge:** mit dem Hoster von Server und Speicher (Art. 28 DSGVO). Nutzt du Coolify Cloud statt einer eigenen Instanz, prüfe das auch dafür: Dort liegen deine Zugangsdaten.
+- [ ] **AV-Vertrag:** mit dem Hoster des Servers (Art. 28 DSGVO). Nutzt du Coolify Cloud statt einer eigenen Instanz, prüfe das auch dafür: Dort liegen deine Zugangsdaten.
 - [ ] **Datenschutzerklärung** mit der Datenschutzberatung abstimmen. Sie nennt Hetzner als Hoster; bei einem anderen Anbieter `apps/web/src/pages/legal/LegalPages.tsx` anpassen.
 
 ## 2. Anwendung anlegen
@@ -42,19 +41,16 @@ Unter **Environment Variables**. Diese Werte erzeugt Coolify selbst, bitte nicht
 
 Diese Werte trägst du ein. Ohne die Pflichtfelder startet Coolify das Deployment nicht:
 
-| Variable               | Pflicht | Beispiel                                              |
-| ---------------------- | ------- | ----------------------------------------------------- |
-| `S3_ENDPOINT`          | ja      | `https://fsn1.your-objectstorage.com`                 |
-| `S3_BUCKET`            | ja      | `comatch-selfies`                                     |
-| `S3_ACCESS_KEY_ID`     | ja      |                                                       |
-| `S3_SECRET_ACCESS_KEY` | ja      |                                                       |
-| `S3_REGION`            | nein    | `fsn1` (Standard)                                     |
-| `LEGAL_NAME`           | ja      | `Beispiel Events GmbH`                                |
-| `LEGAL_ADDRESS`        | ja      | `Musterstraße 1, 10115 Berlin`                        |
-| `LEGAL_EMAIL`          | ja      | `kontakt@example.de`                                  |
-| `LEGAL_PHONE`          | nein    |                                                       |
-| `LEGAL_DPO`            | nein    | Name und Kontakt der oder des Datenschutzbeauftragten |
-| `RETENTION_HOURS`      | nein    | `24` (Standard)                                       |
+| Variable          | Pflicht | Beispiel                                              |
+| ----------------- | ------- | ----------------------------------------------------- |
+| `LEGAL_NAME`      | ja      | `Beispiel Events GmbH`                                |
+| `LEGAL_ADDRESS`   | ja      | `Musterstraße 1, 10115 Berlin`                        |
+| `LEGAL_EMAIL`     | ja      | `kontakt@example.de`                                  |
+| `LEGAL_PHONE`     | nein    |                                                       |
+| `LEGAL_DPO`       | nein    | Name und Kontakt der oder des Datenschutzbeauftragten |
+| `RETENTION_HOURS` | nein    | `24` (Standard)                                       |
+
+Die Variablen `S3_*` leer lassen, dann liegen die Selfies in der Datenbank. Nur wer die Fotos lieber in einem S3-Speicher hält (z. B. Hetzner Object Storage, Bucket privat), füllt `S3_ENDPOINT` (z. B. `https://fsn1.your-objectstorage.com`), `S3_BUCKET`, `S3_ACCESS_KEY_ID` und `S3_SECRET_ACCESS_KEY`, optional `S3_REGION` (Standard `fsn1`). Die Einträge unter **S3 Storage** in Coolify gelten nur für Coolifys eigene Backups, die App liest sie nicht. Mit S3 kommt dessen Anbieter zum AV-Vertrag dazu.
 
 ## 5. Deployen und prüfen
 
@@ -89,7 +85,7 @@ Das Passwort erscheint einmal, also im Passwort-Manager speichern. Weitere Admin
 
 ### Sicherungen
 
-Der Dienst `backup` sichert die Datenbank beim Start und danach alle 24 Stunden ins Volume `backups` und behält 7 Tage. Fotos sind nicht enthalten. Sie liegen im S3-Speicher und werden nach der Löschfrist entfernt.
+Der Dienst `backup` sichert die Datenbank beim Start und danach alle 24 Stunden ins Volume `backups` und behält 7 Tage. Fotos sind nicht enthalten, damit sie nicht länger als die Löschfrist aufbewahrt werden. Nach einer Wiederherstellung fehlen deshalb die Selfies laufender Events, Teilnehmende nehmen dann ein neues auf.
 
 Die Sicherungen liegen auf demselben Server. Für den Ausfall des ganzen Servers brauchst du eine zweite Kopie, z. B. Hetzner-Server-Backups. Auch dort höchstens 7 Tage aufbewahren, so steht es in der Datenschutzerklärung.
 
@@ -109,15 +105,15 @@ Die Sicherungen liegen auf demselben Server. Für den Ausfall des ganzen Servers
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Deployment startet nicht, Variable fehlt      | Ein Pflichtfeld aus Abschnitt 4 ist leer.                                                                             |
 | „No Available Server“                         | Port in der Domain fehlt (`:3000`) oder der Dienst `app` ist nicht gesund. Runtime Logs ansehen.                      |
-| App startet nicht, Fehler zu `S3` oder Bucket | Endpunkt, Schlüssel oder Bucket falsch. Die App prüft den Bucket beim Start.                                          |
+| App startet nicht, Fehler zu `S3` oder Bucket | Nur mit S3: Endpunkt, Schlüssel oder Bucket falsch. Die App prüft den Bucket beim Start. Ohne S3 alle `S3_*` leeren.  |
 | Links und QR-Code zeigen eine falsche Adresse | Domain geändert, aber nicht neu deployt.                                                                              |
 | Kamera öffnet sich nicht direkt               | Die Seite läuft ohne HTTPS, z. B. unter der automatischen `sslip.io`-Adresse. Eigene Domain mit `https://` eintragen. |
 | Datenbank-Anmeldung schlägt fehl              | `SERVICE_PASSWORD_POSTGRES` wurde nach dem ersten Start geändert. Alten Wert wieder eintragen.                        |
 
 ## Was getestet ist
 
-Getestet wurde lokal, nicht auf einer echten Coolify-Instanz: dieselbe Compose-Datei mit nachgestellten `SERVICE_*`-Werten hinter Traefik. Das umfasst 100 Bots mit WebSockets, Sicherheits-Header, Admin-Konto, Neuerstellung der Container ohne Datenverlust, Sicherung und Wiederherstellung.
+Getestet wurde lokal, nicht auf einer echten Coolify-Instanz: dieselbe Compose-Datei mit nachgestellten `SERVICE_*`-Werten hinter Traefik. Das umfasst 100 Bots mit WebSockets, Sicherheits-Header, Admin-Konto, Neuerstellung der Container ohne Datenverlust, Sicherung und Wiederherstellung. Diese Tests liefen noch mit Selfies im S3-Emulator, die Ablage in der Datenbank ist mit eigenen Tests und im Dev-Server geprüft.
 
-Noch offen, weil dafür echte Zugänge nötig sind: wie Coolify die Datei einliest und die Domain verdrahtet, Let's-Encrypt-Zertifikat und Hetzner Object Storage. Lokal lief der Speicher gegen den Emulator RustFS. Prüfe beim ersten Deployment deshalb auch, dass ein Selfie hochgeladen und angezeigt wird, und danach das [Probe-Event](DEPLOY.md#4-probe-event-vor-dem-ersten-echten-einsatz).
+Noch offen, weil dafür echte Zugänge nötig sind: wie Coolify die Datei einliest und die Domain verdrahtet, und das Let's-Encrypt-Zertifikat. Prüfe beim ersten Deployment auch, dass ein Selfie hochgeladen und angezeigt wird, und danach das [Probe-Event](DEPLOY.md#4-probe-event-vor-dem-ersten-echten-einsatz).
 
 Quellen: [Coolify: Docker Compose](https://coolify.io/docs/knowledge-base/docker/compose), [Coolify: Compose Build Pack](https://coolify.io/docs/applications/build-packs/docker-compose).

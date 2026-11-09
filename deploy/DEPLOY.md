@@ -2,7 +2,7 @@
 
 Diese Anleitung gilt für einen eigenen Server ohne Plattform. Mit Coolify: siehe [COOLIFY.md](COOLIFY.md).
 
-Ein Server reicht für Events bis 100 Teilnehmende mit großem Puffer (Lasttest: 200 Clients, siehe README). Alles läuft per Docker Compose: Caddy (HTTPS), App, Postgres und ein Backup-Dienst. Selfies liegen im Hetzner Object Storage.
+Ein Server reicht für Events bis 100 Teilnehmende mit großem Puffer (Lasttest: 200 Clients, siehe README). Alles läuft per Docker Compose: Caddy (HTTPS), App, Postgres und ein Backup-Dienst. Selfies liegen in der Datenbank.
 
 ## 1. Einmalig vorbereiten
 
@@ -26,17 +26,16 @@ Ein Server reicht für Events bis 100 Teilnehmende mit großem Puffer (Lasttest:
 
 - [ ] DNS: A-Eintrag (und AAAA für IPv6) der Domain, z. B. `match.example.de`, auf die Server-IP. Caddy holt das Zertifikat beim ersten Start automatisch.
 
-**Object Storage**
+**Optional: Object Storage**
 
-- [ ] Cloud Console → Object Storage → Bucket anlegen, Standort wie der Server (z. B. `fsn1`), Sichtbarkeit **privat**.
-- [ ] Zugangsschlüssel (S3-Credentials) erzeugen. Endpunkt: `https://fsn1.your-objectstorage.com` (je nach Standort).
+Nur wenn die Selfies nicht in der Datenbank liegen sollen: In der Cloud Console unter Object Storage einen Bucket anlegen (Standort wie der Server, Sichtbarkeit **privat**), Zugangsschlüssel erzeugen und die Werte `S3_*` in `deploy/.env` ausfüllen. Endpunkt z. B. `https://fsn1.your-objectstorage.com`.
 
 ## 2. Installieren
 
 ```bash
 git clone <repo-url> comatch && cd comatch
 cp deploy/env.example deploy/.env && chmod 600 deploy/.env
-nano deploy/.env   # DOMAIN, Passwörter, S3_*, LEGAL_* ausfüllen
+nano deploy/.env   # DOMAIN, Passwörter, LEGAL_* ausfüllen
 ```
 
 Zufällige Werte für `POSTGRES_PASSWORD` und `MEDIA_SIGNING_SECRET`:
@@ -89,7 +88,7 @@ alias dc='docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.en
 
 ### Sicherungen
 
-- Der Dienst `backup` sichert die Datenbank täglich (`pg_dump`) ins Volume `backups` und behält 7 Tage. Fotos sind nicht in der Sicherung, sie liegen im Object Storage und werden nach der Löschfrist ohnehin entfernt.
+- Der Dienst `backup` sichert die Datenbank täglich (`pg_dump`) ins Volume `backups` und behält 7 Tage. Fotos sind nicht in der Sicherung (Tabelle `media_object` ohne Inhalt), damit sie nicht länger als die Löschfrist aufbewahrt werden. Nach einer Wiederherstellung fehlen deshalb die Selfies laufender Events.
 - Die Sicherungen liegen auf demselben Server. Für eine Kopie außerhalb: Hetzner-Server-Backups aktivieren (siehe oben) oder die Dateien regelmäßig auf eine Storage Box kopieren. Auch dort höchstens 7 Tage aufbewahren, so steht es in der Datenschutzerklärung.
 
 Wiederherstellen (überschreibt die aktuelle Datenbank):

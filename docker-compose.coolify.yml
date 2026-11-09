@@ -22,12 +22,12 @@ services:
       - MEDIA_SIGNING_SECRET=${SERVICE_PASSWORD_64_MEDIA}
       # Hinter dem Proxy von Coolify: X-Forwarded-For ist vertrauenswürdig (Rate-Limits je IP).
       - TRUST_PROXY=true
-      # Selfies: S3-kompatibler Speicher, z. B. Hetzner Object Storage.
-      - S3_ENDPOINT=${S3_ENDPOINT:?}
-      - S3_REGION=${S3_REGION:-fsn1}
-      - S3_BUCKET=${S3_BUCKET:?}
-      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:?}
-      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:?}
+      # Selfies liegen in der Datenbank. Optional ein S3-Speicher, dann alle vier S3-Werte füllen.
+      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - S3_REGION=${S3_REGION:-}
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-}
       # Stunden nach Eventende, bis Selfies und Sitzungen gelöscht werden.
       - RETENTION_HOURS=${RETENTION_HOURS:-24}
       # Impressum und Datenschutzerklärung.
