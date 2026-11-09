@@ -8,7 +8,8 @@ import {
   type ParticipantMatch,
 } from "@comatch/shared";
 import { cx } from "../../components/ui.tsx";
-import { api, errorMessage } from "../../lib/api.ts";
+import { errorText, useT } from "../../i18n/index.tsx";
+import { api } from "../../lib/api.ts";
 import { formatCountdown, useRemaining } from "../../lib/live.ts";
 import { PrimaryButton } from "./parts.tsx";
 
@@ -23,10 +24,11 @@ interface MatchProps {
 }
 
 function GroundList({ items, compact }: { items: CommonGround[]; compact?: boolean }) {
+  const t = useT();
   if (items.length === 0) {
     return (
       <p className={cx("text-center text-slate-400", compact ? "text-xs" : "text-sm")}>
-        Ganz verschiedene Antworten: perfekt für neue Perspektiven.
+        {t.match.allDifferent}
       </p>
     );
   }
@@ -38,7 +40,7 @@ function GroundList({ items, compact }: { items: CommonGround[]; compact?: boole
           className="rounded-full bg-brand/15 px-3 py-1 text-slate-100 ring-1 ring-brand/30"
           title={item.question}
         >
-          {item.kind === "same" ? `Beide: ${item.own}` : `${item.own} trifft ${item.partner}`}
+          {item.kind === "same" ? t.match.bothSame(item.own) : t.match.complements(item.own, item.partner)}
         </li>
       ))}
     </ul>
@@ -55,13 +57,14 @@ function PartnerCard({
   /** Dreiergruppe: kleinere Karten, die Person zum Bestätigen bekommt ein Label. */
   compact: boolean;
 }) {
+  const t = useT();
   return (
     <figure className="flex flex-col items-center gap-2">
       <div className="relative w-full">
         {partner.selfieUrl ? (
           <img
             src={partner.selfieUrl}
-            alt="Selfie deines Matches"
+            alt={t.match.partnerSelfie}
             className={cx(
               "aspect-[3/4] w-full rounded-3xl object-cover",
               highlight ? "ring-4 ring-brand" : "ring-1 ring-white/20",
@@ -72,12 +75,12 @@ function PartnerCard({
         )}
         {compact && highlight && (
           <span className="absolute inset-x-2 bottom-2 rounded-full bg-brand px-2 py-0.5 text-center text-xs font-semibold text-white">
-            Diesen Code wählen
+            {t.match.pickThisCode}
           </span>
         )}
         {partner.confirmedMe && (
           <span className="absolute top-2 right-2 rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-semibold text-white">
-            hat dich ✓
+            {t.match.confirmedMe}
           </span>
         )}
       </div>
@@ -89,17 +92,19 @@ function PartnerCard({
 }
 
 function OwnCode({ code }: { code: string }) {
+  const t = useT();
   return (
     <div className="w-full rounded-2xl bg-white/5 p-4 text-center ring-1 ring-white/10">
-      <p className="text-sm text-slate-400">Dein Code</p>
+      <p className="text-sm text-slate-400">{t.match.yourCode}</p>
       <p className="font-mono text-5xl font-bold tracking-widest text-brand tabular-nums">{code}</p>
-      <p className="mt-1 text-sm text-slate-400">Zeig ihn deinem Gegenüber.</p>
+      <p className="mt-1 text-sm text-slate-400">{t.match.showYourCode}</p>
     </div>
   );
 }
 
 /** Code des Gegenübers wählen (oder nach drei Fehlversuchen eintippen). */
 function CodePicker({ match, offsetMs, token, onState }: Omit<MatchProps, "round" | "remaining">) {
+  const t = useT();
   const { confirm } = match;
   const lockRemaining = useRemaining(confirm.lockedUntil, offsetMs);
   const locked = lockRemaining !== null && lockRemaining > 0;
@@ -123,7 +128,7 @@ function CodePicker({ match, offsetMs, token, onState }: Omit<MatchProps, "round
       }
       onState(res.state);
     } catch (err) {
-      setError(errorMessage(err));
+      setError(errorText(t, err));
     } finally {
       setBusy(null);
     }
@@ -132,12 +137,8 @@ function CodePicker({ match, offsetMs, token, onState }: Omit<MatchProps, "round
   if (confirm.confirmed) {
     return (
       <div className="w-full rounded-2xl bg-emerald-500/15 p-4 text-center text-emerald-100 ring-1 ring-emerald-400/30">
-        <p className="font-semibold">✓ Code bestätigt</p>
-        <p className="mt-1 text-sm">
-          {many
-            ? "Jetzt fehlen nur noch die anderen …"
-            : "Jetzt muss nur noch dein Gegenüber deinen Code wählen …"}
-        </p>
+        <p className="font-semibold">{t.match.codeConfirmed}</p>
+        <p className="mt-1 text-sm">{many ? t.match.waitingForOthers : t.match.waitingForPartner}</p>
       </div>
     );
   }
@@ -149,11 +150,7 @@ function CodePicker({ match, offsetMs, token, onState }: Omit<MatchProps, "round
 
   return (
     <div className="flex w-full flex-col gap-3">
-      <p className="text-center font-medium">
-        {many
-          ? "Gefunden? Wähl den Code der markierten Person:"
-          : "Gefunden? Welcher Code steht auf dem Handy deines Gegenübers?"}
-      </p>
+      <p className="text-center font-medium">{many ? t.match.pickMarked : t.match.pickPartner}</p>
       {confirm.options ? (
         <div className="grid grid-cols-3 gap-2">
           {confirm.options.map((code) => (
@@ -175,33 +172,29 @@ function CodePicker({ match, offsetMs, token, onState }: Omit<MatchProps, "round
         </div>
       ) : (
         <form onSubmit={onSubmitTyped} className="flex flex-col gap-2">
-          <p className="text-center text-sm text-slate-400">
-            Zeigt euch gegenseitig eure Codes und tippt den Code deines Gegenübers ein.
-          </p>
+          <p className="text-center text-sm text-slate-400">{t.match.typeHint}</p>
           <input
             value={typed}
             onChange={(e) => setTyped(e.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))}
             inputMode="numeric"
             autoComplete="off"
-            aria-label="Code deines Gegenübers"
+            aria-label={t.match.partnerCode}
             placeholder="000"
             disabled={locked}
             className="min-h-14 w-full rounded-2xl bg-white/10 text-center font-mono text-3xl tracking-widest ring-1 ring-white/15 placeholder:text-slate-600 focus:ring-brand focus:outline-none"
           />
           <PrimaryButton type="submit" busy={busy !== null} disabled={locked || typed.length !== CODE_LENGTH}>
-            Bestätigen
+            {t.match.confirm}
           </PrimaryButton>
         </form>
       )}
       {locked ? (
         <p role="status" className="text-center text-sm text-rose-200">
-          Das war nicht der richtige Code. Noch {Math.ceil(lockRemaining / 1000)} s, dann nochmal.
+          {t.match.wrongCode(Math.ceil(lockRemaining / 1000))}
         </p>
       ) : (
         confirm.wrongAttempts > 0 &&
-        confirm.options && (
-          <p className="text-center text-sm text-slate-400">Schau genau hin: Die Codes sehen sich ähnlich.</p>
-        )
+        confirm.options && <p className="text-center text-sm text-slate-400">{t.match.lookClosely}</p>
       )}
       {error && (
         <p role="alert" className="text-center text-sm text-rose-200">
@@ -214,6 +207,7 @@ function CodePicker({ match, offsetMs, token, onState }: Omit<MatchProps, "round
 
 /** „Nicht gefunden“ – ab Rundenmitte, mit Rückfrage. */
 function NotFound({ match, offsetMs, token, onState }: Omit<MatchProps, "round" | "remaining">) {
+  const t = useT();
   const wait = useRemaining(match.notFoundFrom, offsetMs);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -223,7 +217,7 @@ function NotFound({ match, offsetMs, token, onState }: Omit<MatchProps, "round" 
   if (wait > 0) {
     return (
       <p className="text-center text-sm text-slate-500 tabular-nums">
-        Noch nicht gefunden? In {formatCountdown(wait)} kannst du ein neues Match bekommen.
+        {t.match.notFoundWait(formatCountdown(wait))}
       </p>
     );
   }
@@ -240,7 +234,7 @@ function NotFound({ match, offsetMs, token, onState }: Omit<MatchProps, "round" 
         }),
       );
     } catch (err) {
-      setError(errorMessage(err));
+      setError(errorText(t, err));
       setBusy(false);
     }
   };
@@ -249,10 +243,10 @@ function NotFound({ match, offsetMs, token, onState }: Omit<MatchProps, "round" 
     <div className="flex flex-col items-center gap-2 text-center">
       {asking ? (
         <div className="flex w-full flex-col gap-2 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-          <p className="text-sm text-slate-300">Neues Match suchen? Dieses Match endet dann.</p>
+          <p className="text-sm text-slate-300">{t.match.newMatchConfirm}</p>
           <div className="flex gap-2">
             <PrimaryButton busy={busy} onClick={() => void giveUp()}>
-              Ja, neues Match
+              {t.match.newMatchYes}
             </PrimaryButton>
             <button
               type="button"
@@ -260,7 +254,7 @@ function NotFound({ match, offsetMs, token, onState }: Omit<MatchProps, "round" 
               onClick={() => setAsking(false)}
               className="min-h-14 shrink-0 rounded-2xl px-4 text-slate-300"
             >
-              Weitersuchen
+              {t.match.keepSearching}
             </button>
           </div>
         </div>
@@ -270,7 +264,7 @@ function NotFound({ match, offsetMs, token, onState }: Omit<MatchProps, "round" 
           onClick={() => setAsking(true)}
           className="py-2 text-sm text-slate-400 underline underline-offset-4"
         >
-          {match.partners.length > 1 ? "Ich finde die beiden nicht" : "Person nicht gefunden"}
+          {match.partners.length > 1 ? t.match.cantFindBoth : t.match.cantFindPerson}
         </button>
       )}
       {error && (
@@ -284,16 +278,15 @@ function NotFound({ match, offsetMs, token, onState }: Omit<MatchProps, "round" 
 
 /** Match läuft: Selfies, Gemeinsamkeiten, eigener Code und Auswahl des Codes. */
 export function MatchScreen(props: MatchProps) {
+  const t = useT();
   const { match, round, remaining } = props;
   const many = match.partners.length > 1;
   return (
     <div className="flex flex-1 flex-col items-center gap-4">
       <p className="text-sm text-slate-400 tabular-nums">
-        Runde {round} · noch {formatCountdown(remaining)}
+        {t.match.roundInfo(round, formatCountdown(remaining))}
       </p>
-      <h1 className="text-center text-3xl font-bold">
-        {many ? "Finde diese beiden!" : "Finde diese Person!"}
-      </h1>
+      <h1 className="text-center text-3xl font-bold">{many ? t.match.findBoth : t.match.findPerson}</h1>
       <div className={many ? "grid w-full grid-cols-2 gap-3" : "w-full max-w-48"}>
         {match.partners.map((p) => (
           <PartnerCard
@@ -315,6 +308,7 @@ export function MatchScreen(props: MatchProps) {
 
 /** Alle haben bestätigt: Erfolg und Zeit zum Reden bis zur nächsten Runde. */
 export function ConfirmedScreen({ match, remaining }: Pick<MatchProps, "match" | "remaining">) {
+  const t = useT();
   const many = match.partners.length > 1;
   return (
     <div className="flex flex-1 flex-col items-center gap-5 text-center">
@@ -322,10 +316,8 @@ export function ConfirmedScreen({ match, remaining }: Pick<MatchProps, "match" |
         🎉
       </span>
       <div>
-        <h1 className="text-3xl font-bold">Ihr habt euch gefunden!</h1>
-        <p className="mt-2 text-slate-400 tabular-nums">
-          Zeit zum Reden. Die nächste Runde startet in {formatCountdown(remaining)}.
-        </p>
+        <h1 className="text-3xl font-bold">{t.match.foundTitle}</h1>
+        <p className="mt-2 text-slate-400 tabular-nums">{t.match.foundText(formatCountdown(remaining))}</p>
       </div>
       <div className={many ? "grid w-full grid-cols-2 gap-3" : "w-full max-w-56"}>
         {match.partners.map((p) =>
@@ -333,7 +325,7 @@ export function ConfirmedScreen({ match, remaining }: Pick<MatchProps, "match" |
             <img
               key={p.id}
               src={p.selfieUrl}
-              alt="Selfie deines Matches"
+              alt={t.match.partnerSelfie}
               className="aspect-[3/4] w-full rounded-3xl object-cover ring-4 ring-emerald-500"
             />
           ) : (
@@ -342,7 +334,7 @@ export function ConfirmedScreen({ match, remaining }: Pick<MatchProps, "match" |
         )}
       </div>
       <div className="flex w-full flex-col gap-2 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-        <p className="text-sm font-medium text-slate-300">Gesprächseinstieg</p>
+        <p className="text-sm font-medium text-slate-300">{t.match.icebreaker}</p>
         {match.partners.map((p) => (
           <GroundList key={p.id} items={p.commonGround} />
         ))}

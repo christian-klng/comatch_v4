@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   EVENT_STATUSES,
+  LANGUAGES,
   MATCH_GROUP_KINDS,
   MATCH_GROUP_STATUSES,
   MATCH_MODES,
@@ -24,6 +25,7 @@ import {
 } from "@comatch/shared";
 
 export const eventStatus = pgEnum("event_status", EVENT_STATUSES);
+export const eventLanguage = pgEnum("event_language", LANGUAGES);
 export const participantStatus = pgEnum("participant_status", PARTICIPANT_STATUSES);
 export const matchMode = pgEnum("match_mode", MATCH_MODES);
 export const matchGroupKind = pgEnum("match_group_kind", MATCH_GROUP_KINDS);
@@ -83,6 +85,8 @@ export const event = pgTable("event", {
   title: text().notNull(),
   startsAt: timestamp({ withTimezone: true }),
   status: eventStatus().notNull().default("draft"),
+  /** Sprache der Oberfläche für Teilnehmende und Leinwand (Fragen schreiben Admins selbst). */
+  language: eventLanguage().notNull().default("de"),
   roundDurationS: integer().notNull().default(300),
   firstMatchDelayS: integer().notNull().default(30),
   currentRound: integer().notNull().default(0),

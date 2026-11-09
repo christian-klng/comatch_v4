@@ -1,6 +1,7 @@
 import confetti from "canvas-confetti";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { ConfirmedMatch } from "@comatch/shared";
+import { useT } from "../../i18n/index.tsx";
 
 /** Dauer einer Animation: anfliegen, andocken, kurz zeigen, ausblenden. */
 const PLAY_MS = 2_800;
@@ -113,6 +114,7 @@ function FlyingMatch({ match, height }: { match: ConfirmedMatch; height: string 
 
 /** Bühne für bestätigte Matches: Animation, sonst die letzten Matches der Runde. */
 export function MatchStage({ recent, color }: { recent: ConfirmedMatch[] | undefined; color: string }) {
+  const t = useT();
   const playing = useMatchQueue(recent);
 
   useEffect(() => {
@@ -125,7 +127,7 @@ export function MatchStage({ recent, color }: { recent: ConfirmedMatch[] | undef
     const height = playing.length === 1 ? "30vh" : playing.length === 2 ? "24vh" : "19vh";
     return (
       <div className="flex h-full items-center justify-center gap-[5vw]" aria-live="polite">
-        <p className="sr-only">{playing.length === 1 ? "Neues Match!" : `${playing.length} neue Matches!`}</p>
+        <p className="sr-only">{t.present.newMatchAnnouncement(playing.length)}</p>
         {playing.map((m) => (
           <FlyingMatch key={m.id} match={m} height={height} />
         ))}
@@ -137,15 +139,13 @@ export function MatchStage({ recent, color }: { recent: ConfirmedMatch[] | undef
   if (idle.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-[3.2vh] text-slate-400">
-          Findet euer Match und zeigt euch gegenseitig eure Codes!
-        </p>
+        <p className="text-[3.2vh] text-slate-400">{t.present.findYourMatch}</p>
       </div>
     );
   }
   return (
     <div className="flex h-full flex-col items-center justify-center gap-[2vh]">
-      <p className="text-[2.4vh] tracking-wide text-slate-400 uppercase">Gerade gefunden</p>
+      <p className="text-[2.4vh] tracking-wide text-slate-400 uppercase">{t.present.justFound}</p>
       <div className="flex flex-wrap justify-center gap-[2.5vw]">
         {idle.map((m) => (
           <div

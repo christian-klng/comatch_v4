@@ -1,7 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import type { EventDetail, EventSummary } from "@comatch/shared";
-import { Alert, Button, Card, Field, Input, Spinner, StatusBadge } from "../../components/ui.tsx";
+import {
+  DEFAULT_LANGUAGE,
+  LANGUAGES,
+  type EventDetail,
+  type EventSummary,
+  type Language,
+} from "@comatch/shared";
+import { Alert, Button, Card, Field, Input, Select, Spinner, StatusBadge } from "../../components/ui.tsx";
+import { LANGUAGE_LABELS } from "../../i18n/index.tsx";
 import { api, ApiError, errorMessage } from "../../lib/api.ts";
 import { formatDate, formatDateTime, fromLocalInput } from "../../lib/format.ts";
 
@@ -9,6 +16,7 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [startsAt, setStartsAt] = useState("");
+  const [language, setLanguage] = useState<Language>(DEFAULT_LANGUAGE);
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -19,7 +27,7 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
     try {
       const created = await api<EventDetail>("/admin/events", {
         method: "POST",
-        body: { title, startsAt: fromLocalInput(startsAt) },
+        body: { title, startsAt: fromLocalInput(startsAt), language },
       });
       navigate(`/admin/events/${created.id}`);
     } catch (err) {
@@ -33,7 +41,7 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
       <form onSubmit={submit} className="flex flex-col gap-4">
         <h2 className="font-semibold">Neues Event</h2>
         {error && !error.issues.title && <Alert>{error.message}</Alert>}
-        <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+        <div className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
           <Field label="Titel" htmlFor="new-title" error={error?.issues.title}>
             <Input
               id="new-title"
@@ -53,9 +61,23 @@ function NewEventForm({ onCancel }: { onCancel: () => void }) {
               onChange={(e) => setStartsAt(e.target.value)}
             />
           </Field>
+          <Field label="Sprache" htmlFor="new-language">
+            <Select
+              id="new-language"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l} value={l}>
+                  {LANGUAGE_LABELS[l]}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
         <p className="text-sm text-slate-500">
-          Das Event startet mit drei Beispielfragen, die du danach anpassen kannst.
+          Das Event startet mit drei Beispielfragen in der gewählten Sprache, die du danach anpassen kannst.
+          Die Sprache bestimmt, was Teilnehmende und die Leinwand sehen.
         </p>
         <div className="flex gap-2">
           <Button type="submit" busy={busy}>

@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router";
 import type { EventLive, PresenterEvent } from "@comatch/shared";
 import { QrCode } from "../../components/QrCode.tsx";
 import { cx } from "../../components/ui.tsx";
+import { I18nProvider, browserLanguage, messagesFor, useT } from "../../i18n/index.tsx";
 import { api } from "../../lib/api.ts";
 import { formatCountdown, useLive, useRemaining } from "../../lib/live.ts";
 import { useWakeLock } from "../../lib/wakeLock.ts";
@@ -36,6 +37,7 @@ function useRoundBanner(round: number | undefined) {
 }
 
 function FullscreenButton() {
+  const t = useT();
   const [fullscreen, setFullscreen] = useState(() => document.fullscreenElement !== null);
   useEffect(() => {
     const update = () => setFullscreen(document.fullscreenElement !== null);
@@ -49,7 +51,7 @@ function FullscreenButton() {
       onClick={() => void document.documentElement.requestFullscreen().catch(() => {})}
       className="absolute top-4 right-4 z-30 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-slate-300 opacity-40 transition hover:opacity-100"
     >
-      Vollbild
+      {t.present.fullscreen}
     </button>
   );
 }
@@ -75,6 +77,7 @@ function QrBox({ url, size }: { url: string; size: string }) {
 }
 
 function Lobby({ info, state }: { info: PresenterEvent; state: EventLive | null }) {
+  const t = useT();
   const open = state?.clock.status === "open";
   const joined = state?.counts.joined ?? 0;
   return (
@@ -87,7 +90,7 @@ function Lobby({ info, state }: { info: PresenterEvent; state: EventLive | null 
           </>
         ) : (
           <div className="flex h-[52vh] w-[52vh] items-center justify-center rounded-[2vh] bg-white/5 p-[4vh] text-center text-[3.4vh] text-slate-400 ring-1 ring-white/10">
-            Gleich öffnen wir den Beitritt.
+            {t.present.joinSoon}
           </div>
         )}
       </div>
@@ -95,14 +98,12 @@ function Lobby({ info, state }: { info: PresenterEvent; state: EventLive | null 
         <div>
           <h1 className="text-[8vh] leading-tight font-bold">{info.title}</h1>
           <p className="mt-[1vh] text-[3.6vh] text-slate-300">
-            {open
-              ? "QR-Code scannen, drei Fragen beantworten, Selfie machen. Fertig!"
-              : "Gleich geht es los."}
+            {open ? t.present.howToJoin : t.present.startingSoon}
           </p>
         </div>
         <p className="text-[4.5vh] text-slate-300">
           <span className="text-[12vh] leading-none font-bold text-brand tabular-nums">{joined}</span>{" "}
-          {joined === 1 ? "Gründer*in ist dabei" : "Gründer*innen sind dabei"}
+          {t.present.joined(joined)}
         </p>
         {state && state.selfies.length > 0 && (
           <div className="flex flex-wrap gap-[1.2vh]" aria-hidden>
@@ -142,6 +143,7 @@ function Rounds({
   remaining: number | null;
   color: string;
 }) {
+  const t = useT();
   const paused = state.clock.status === "paused";
   const shown = paused ? state.clock.pausedRemainingMs : remaining;
   const final = !paused && remaining !== null && remaining <= FINAL_SECONDS_MS;
@@ -149,7 +151,7 @@ function Rounds({
     <div className="relative flex flex-1 flex-col">
       <div className="flex flex-col items-center">
         <p className="text-[3.4vh] tracking-wide text-slate-400 uppercase">
-          {paused ? `Runde ${state.clock.round} · Pause` : `Runde ${state.clock.round} · nächste Runde in`}
+          {paused ? t.present.roundPaused(state.clock.round) : t.present.roundNext(state.clock.round)}
         </p>
         <p
           className={cx(
@@ -165,7 +167,7 @@ function Rounds({
       <div className="min-h-0 flex-1">
         {paused ? (
           <div className="flex h-full items-center justify-center text-[5vh] font-semibold text-slate-300">
-            ☕ Kurze Pause, gleich geht es weiter.
+            {t.present.paused}
           </div>
         ) : (
           <MatchStage recent={state.recentConfirmed} color={color} />
@@ -174,13 +176,13 @@ function Rounds({
 
       <div className="flex items-end justify-between gap-[3vw]">
         <div className="flex gap-[5vw]">
-          <Stat value={state.matches.confirmed} label="Matches in dieser Runde" />
-          <Stat value={state.totals.confirmedMatches} label="Matches insgesamt" />
-          <Stat value={state.counts.active} label="dabei" />
+          <Stat value={state.matches.confirmed} label={t.present.matchesThisRound} />
+          <Stat value={state.totals.confirmedMatches} label={t.present.matchesTotal} />
+          <Stat value={state.counts.active} label={t.present.active} />
         </div>
         <div className="flex items-center gap-[1.5vw]">
           <p className="text-right text-[2.4vh] text-slate-400">
-            Noch nicht dabei?
+            {t.present.notJoinedYet}
             <br />
             <span className="font-mono text-slate-200">{shortUrl(info.joinUrl)}</span>
           </p>
@@ -219,6 +221,7 @@ function useSize() {
 }
 
 function EndSlide({ state }: { state: EventLive }) {
+  const t = useT();
   const { confirmedMatches, rounds } = state.totals;
   const [ref, size] = useSize();
   const gap = Math.round(size.height * 0.015);
@@ -226,11 +229,11 @@ function EndSlide({ state }: { state: EventLive }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center gap-[3vh] text-center">
       <div>
-        <h1 className="text-[9vh] leading-tight font-bold">Danke fürs Mitmachen! 🎉</h1>
+        <h1 className="text-[9vh] leading-tight font-bold">{t.present.thanks}</h1>
         <p className="text-[4.5vh] text-slate-300">
           <span className="font-bold text-brand tabular-nums">{confirmedMatches}</span>{" "}
-          {confirmedMatches === 1 ? "Match" : "Matches"} in{" "}
-          <span className="font-bold tabular-nums">{rounds}</span> {rounds === 1 ? "Runde" : "Runden"}
+          {t.present.matches(confirmedMatches)} {t.present.in}{" "}
+          <span className="font-bold tabular-nums">{rounds}</span> {t.present.rounds(rounds)}
         </p>
       </div>
       {/* Collage: Kachelgröße so, dass alle Selfies ohne Scrollen passen. */}
@@ -290,54 +293,64 @@ export function PresentPage() {
   const remaining = useRemaining(state?.clock.roundEndsAt ?? null, live.offsetMs);
   const banner = useRoundBanner(state?.clock.round);
   useWakeLock();
+  // Bis die Event-Angaben da sind (oder wenn der Link nicht stimmt), gilt die Sprache des Browsers.
+  const language = info?.language ?? browserLanguage();
+  const t = messagesFor(language);
 
   if (failed || live.invalid) {
     return (
-      <Notice title="Link ungültig">
-        Bitte den aktuellen Präsentationslink aus der Moderation öffnen. Er ändert sich, wenn jemand ihn neu
-        erzeugt.
-      </Notice>
+      <I18nProvider language={language}>
+        <Notice title={t.present.invalidLinkTitle}>{t.present.invalidLinkText}</Notice>
+      </I18nProvider>
     );
   }
-  if (!info) return <Notice title="Lade …" />;
+  if (!info) {
+    return (
+      <I18nProvider language={language}>
+        <Notice title={t.common.loading} />
+      </I18nProvider>
+    );
+  }
 
   const color = info.primaryColor ?? DEFAULT_COLOR;
   const status = state?.clock.status;
   const style = { "--color-brand": color } as CSSProperties;
 
   return (
-    <main
-      style={style}
-      className="relative flex h-dvh flex-col gap-[3vh] overflow-hidden bg-slate-950 px-[4vw] py-[4vh] text-white"
-    >
-      <FullscreenButton />
-      <Header
-        info={info}
-        right={
-          !live.connected &&
-          state && <span className="text-[2.2vh] text-amber-300">Verbindung wird wiederhergestellt …</span>
-        }
-      />
-      {status === "running" || status === "paused" ? (
-        <Rounds info={info} state={state!} remaining={remaining} color={color} />
-      ) : status === "ended" ? (
-        <EndSlide state={state!} />
-      ) : (
-        <Lobby info={info} state={state} />
-      )}
+    <I18nProvider language={language}>
+      <main
+        style={style}
+        className="relative flex h-dvh flex-col gap-[3vh] overflow-hidden bg-slate-950 px-[4vw] py-[4vh] text-white"
+      >
+        <FullscreenButton />
+        <Header
+          info={info}
+          right={
+            !live.connected &&
+            state && <span className="text-[2.2vh] text-amber-300">{t.common.reconnecting}</span>
+          }
+        />
+        {status === "running" || status === "paused" ? (
+          <Rounds info={info} state={state!} remaining={remaining} color={color} />
+        ) : status === "ended" ? (
+          <EndSlide state={state!} />
+        ) : (
+          <Lobby info={info} state={state} />
+        )}
 
-      {banner !== null && (
-        <div
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-[3vh] bg-slate-950/90"
-          style={{ animation: `banner ${BANNER_MS}ms ease-out both` }}
-          role="status"
-        >
-          <p className="text-[16vh] leading-none font-bold text-brand">
-            {banner === 1 ? "Los geht’s!" : `Runde ${banner}`}
-          </p>
-          <p className="text-[5vh] text-slate-200">Neue Matches! Schaut auf euer Handy 📱</p>
-        </div>
-      )}
-    </main>
+        {banner !== null && (
+          <div
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-[3vh] bg-slate-950/90"
+            style={{ animation: `banner ${BANNER_MS}ms ease-out both` }}
+            role="status"
+          >
+            <p className="text-[16vh] leading-none font-bold text-brand">
+              {banner === 1 ? t.present.letsGo : t.present.round(banner)}
+            </p>
+            <p className="text-[5vh] text-slate-200">{t.present.newMatches}</p>
+          </div>
+        )}
+      </main>
+    </I18nProvider>
   );
 }

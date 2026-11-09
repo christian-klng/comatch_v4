@@ -35,6 +35,9 @@ export const TEST_LEGAL: LegalInfo = {
  * Baut eine App gegen die Test-Datenbank und leert vor jedem Test alle Tabellen.
  * In einer Testdatei auf oberster Ebene aufrufen.
  */
+/** Zähler für die Absender-Adressen der Test-Logins (siehe loginAs). */
+let loginCount = 0;
+
 export function useTestApp() {
   const { db, sql } = createDb(TEST_DATABASE_URL);
   const storage = createMemoryStorage();
@@ -104,15 +107,20 @@ export function useTestApp() {
       return { ...admin!, password };
     },
 
-    /** Legt einen Admin an, meldet ihn an und gibt das Session-Cookie zurück. */
+    /**
+     * Legt einen Admin an, meldet ihn an und gibt das Session-Cookie zurück. Jeder Login kommt von
+     * einer eigenen Adresse, damit das Login-Limit (10 je IP) nicht über viele Tests hinweg greift.
+     */
     async loginAs(email = "admin@test.local") {
       const admin = await ctx.createAdmin(email);
+      loginCount += 1;
       const res = await (
         await appPromise
       ).inject({
         method: "POST",
         url: "/api/auth/login",
         payload: { email, password: admin.password },
+        remoteAddress: `10.99.${loginCount >> 8}.${loginCount & 255}`,
       });
       const cookie = res.cookies.find((c) => c.name === "comatch_admin");
       if (!cookie) throw new Error(`Login fehlgeschlagen: ${res.statusCode} ${res.body}`);

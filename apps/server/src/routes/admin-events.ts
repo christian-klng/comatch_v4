@@ -2,12 +2,12 @@ import { eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import {
-  DEFAULT_QUESTIONS,
   LOGO_MAX_BYTES,
   IMAGE_MIME_TYPES,
   eventCreateInput,
   eventControlInput,
   eventGeneralInput,
+  defaultQuestions,
   questionsInput,
 } from "@comatch/shared";
 import type { AppContext } from "../context.ts";
@@ -52,7 +52,7 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
 
   app.post("/events", async (request, reply) => {
     const input = eventCreateInput.parse(request.body);
-    const id = await createEvent(db, input, request.admin!.id, DEFAULT_QUESTIONS);
+    const id = await createEvent(db, input, request.admin!.id, defaultQuestions(input.language));
     return reply.code(201).send(await detail(id));
   });
 
@@ -70,6 +70,8 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
         roundDurationS: input.roundDurationS,
         firstMatchDelayS: input.firstMatchDelayS,
         primaryColor: input.primaryColor,
+        // Wirkt bei Teilnehmenden und auf der Leinwand beim nächsten Laden der Seite.
+        language: input.language,
       })
       .where(eq(event.id, id));
     return detail(id);

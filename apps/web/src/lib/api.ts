@@ -61,7 +61,10 @@ export async function api<T = void>(
 
   if (!res.ok) {
     const errorBody = (await res.json().catch(() => ({}))) as Partial<ApiErrorBody>;
-    if (res.status === 413) errorBody.message = "Die Datei ist zu groß.";
+    if (res.status === 413) {
+      errorBody.error = "too_large";
+      errorBody.message = "Die Datei ist zu groß.";
+    }
     throw new ApiError(res.status, errorBody);
   }
   if (res.status === 204) return undefined as T;

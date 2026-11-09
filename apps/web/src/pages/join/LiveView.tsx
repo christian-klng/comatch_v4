@@ -6,7 +6,7 @@ import {
   type PublicEvent,
   type SessionEndReason,
 } from "@comatch/shared";
-import { errorMessage } from "../../lib/api.ts";
+import { errorText, useT } from "../../i18n/index.tsx";
 import { formatCountdown, useLive, useRemaining } from "../../lib/live.ts";
 import { useWakeLock } from "../../lib/wakeLock.ts";
 import { ConfirmedScreen, MatchScreen } from "./MatchScreen.tsx";
@@ -42,6 +42,7 @@ function PulseDots() {
 
 /** Selfie ändern und aussteigen, mit Rückfrage. */
 function Footer({ onChangeSelfie, onLeave }: { onChangeSelfie: () => void; onLeave: () => Promise<void> }) {
+  const t = useT();
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,7 @@ function Footer({ onChangeSelfie, onLeave }: { onChangeSelfie: () => void; onLea
     try {
       await onLeave();
     } catch (err) {
-      setError(errorMessage(err));
+      setError(errorText(t, err));
       setLeaving(false);
     }
   };
@@ -66,25 +67,23 @@ function Footer({ onChangeSelfie, onLeave }: { onChangeSelfie: () => void; onLea
       )}
       {confirmLeave ? (
         <div className="flex flex-col gap-3 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-          <p className="text-sm text-slate-300">
-            Wirklich aussteigen? Dein Foto und deine Antworten werden sofort gelöscht.
-          </p>
+          <p className="text-sm text-slate-300">{t.live.leaveConfirm}</p>
           <PrimaryButton busy={leaving} className="bg-rose-600 shadow-none" onClick={() => void leave()}>
-            Ja, aussteigen
+            {t.live.leaveYes}
           </PrimaryButton>
           <SecondaryButton disabled={leaving} onClick={() => setConfirmLeave(false)}>
-            Abbrechen
+            {t.live.cancel}
           </SecondaryButton>
         </div>
       ) : (
         <>
-          <SecondaryButton onClick={onChangeSelfie}>Selfie ändern</SecondaryButton>
+          <SecondaryButton onClick={onChangeSelfie}>{t.live.changeSelfie}</SecondaryButton>
           <button
             type="button"
             onClick={() => setConfirmLeave(true)}
             className="py-2 text-sm text-slate-500 underline-offset-4 hover:underline"
           >
-            Ich steige aus
+            {t.live.leave}
           </button>
         </>
       )}
@@ -106,22 +105,23 @@ function Waiting({
   const labels = event.questions.flatMap(
     (q, i) => q.options.find((o) => o.id === me.answers[i])?.label ?? [],
   );
+  const t = useT();
   const status = state?.clock.status ?? event.status;
 
-  let title = "Du bist dabei!";
-  let hint = "Sobald das Event startet, bekommst du hier dein erstes Match. Lass diese Seite einfach offen.";
+  let title = t.live.inTitle;
+  let hint = t.live.inHint;
   if (status === "running") {
     if ((state?.activeParticipants ?? 0) < 2) {
-      hint = "Du bist die erste Person. Gleich kommen weitere, dann geht es los.";
+      hint = t.live.firstPerson;
     } else if (remaining !== null && remaining < POOL_CUTOFF_MS) {
-      title = "Gleich geht’s weiter";
-      hint = `Die nächste Runde startet in ${formatCountdown(remaining)}. Dann bekommst du dein Match.`;
+      title = t.live.soonTitle;
+      hint = t.live.soonHint(formatCountdown(remaining));
     } else if (state?.previousMatchEnded) {
-      title = "Neues Match wird gesucht …";
-      hint = "Das letzte Match hat nicht geklappt. Gleich bekommst du jemand Neues.";
+      title = t.live.researchTitle;
+      hint = t.live.researchHint;
     } else {
-      title = "Wir suchen dein Match …";
-      hint = "Das dauert höchstens eine halbe Minute. Lass diese Seite offen.";
+      title = t.live.searchTitle;
+      hint = t.live.searchHint;
     }
   }
 
@@ -130,7 +130,7 @@ function Waiting({
       {me.selfieUrl && (
         <img
           src={me.selfieUrl}
-          alt="Dein Selfie"
+          alt={t.live.yourSelfie}
           className="aspect-[3/4] w-40 rounded-3xl object-cover ring-4 ring-brand"
         />
       )}
@@ -142,7 +142,7 @@ function Waiting({
       {labels.length > 0 && (
         <ul
           className="flex flex-wrap justify-center gap-2 text-sm text-slate-300"
-          aria-label="Deine Antworten"
+          aria-label={t.live.yourAnswers}
         >
           {labels.map((label) => (
             <li key={label} className="rounded-full bg-white/5 px-3 py-1 ring-1 ring-white/10">
@@ -177,6 +177,7 @@ export function LiveView({
   /** Die Moderation hat das Selfie zurückgesetzt: neu fotografieren. */
   onSelfieReset: () => void;
 }) {
+  const t = useT();
   const live = useLive<ParticipantLive>({ role: "participant", token }, "state");
   // Antworten auf eigene Aktionen kommen per REST und Socket; der neuere Zustand gewinnt.
   const [fromResponse, setFromResponse] = useState<ParticipantLive | null>(null);
@@ -198,14 +199,14 @@ export function LiveView({
   const status = state?.clock.status ?? event.status;
   const offline = state && !live.connected && (
     <p role="status" className="rounded-xl bg-amber-500/15 px-4 py-3 text-sm text-amber-100">
-      Verbindung wird wiederhergestellt …
+      {t.common.reconnecting}
     </p>
   );
 
   if (status === "ended") {
     return (
-      <Message icon="🎉" title="Danke fürs Mitmachen!">
-        Das Event ist vorbei. Viel Erfolg mit deinem Startup!
+      <Message icon="🎉" title={t.live.endedTitle}>
+        {t.live.endedText}
       </Message>
     );
   }
@@ -213,8 +214,8 @@ export function LiveView({
     return (
       <>
         {offline}
-        <Message icon="☕" title="Kurze Pause">
-          Gleich geht es weiter. Lass diese Seite einfach offen.
+        <Message icon="☕" title={t.live.pauseTitle}>
+          {t.live.pauseText}
         </Message>
         <Footer onChangeSelfie={onChangeSelfie} onLeave={onLeave} />
       </>

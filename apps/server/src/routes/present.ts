@@ -20,6 +20,7 @@ export const presentRoutes: FastifyPluginAsync<AppContext> = async (app, { db, p
         id: true,
         slug: true,
         title: true,
+        language: true,
         primaryColor: true,
         logoUpdatedAt: true,
         presenterToken: true,
@@ -30,6 +31,7 @@ export const presentRoutes: FastifyPluginAsync<AppContext> = async (app, { db, p
     return {
       id: row.id,
       title: row.title,
+      language: row.language,
       joinUrl: `${publicBaseUrl}/e/${row.slug}`,
       logoUrl: row.logoUpdatedAt ? `/api/events/${row.slug}/logo?v=${row.logoUpdatedAt.getTime()}` : null,
       primaryColor: row.primaryColor,

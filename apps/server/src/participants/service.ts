@@ -56,6 +56,7 @@ export async function getPublicEvent(db: Db, slug: string): Promise<PublicEvent>
   return {
     slug: row.slug,
     title: row.title,
+    language: row.language,
     status: row.status,
     joinable: isJoinable(row.status),
     roundDurationS: row.roundDurationS,

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_QUESTIONS, type EventDetail, type QuestionInput } from "@comatch/shared";
+import {
+  DEFAULT_QUESTIONS,
+  defaultQuestions,
+  type EventDetail,
+  type PresenterEvent,
+  type PublicEvent,
+  type QuestionInput,
+} from "@comatch/shared";
 import { participant } from "../db/schema.ts";
 import { useTestApp } from "../../test/helpers.ts";
 
@@ -36,10 +43,46 @@ describe("Events verwalten", () => {
       new RegExp(`^http://comatch.test/present/${event.id}\\?token=\\w{40,}`),
     );
     expect(event.questions).toEqual(DEFAULT_QUESTIONS);
+    expect(event.language).toBe("de");
     expect(event.questionsLocked).toBe(false);
 
     const list = await app.inject({ method: "GET", url: "/api/admin/events", headers: { cookie } });
     expect(list.json()).toEqual([expect.objectContaining({ id: event.id, participantCount: 0 })]);
+  });
+
+  it("legt Events auf Englisch an und ändert die Sprache für Handy und Leinwand", async () => {
+    const { event, app, cookie } = await setup();
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/admin/events",
+      headers: { cookie },
+      payload: { title: "Founders Night", startsAt: null, language: "en" },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json<EventDetail>()).toMatchObject({ language: "en", questions: defaultQuestions("en") });
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/api/admin/events/${event.id}`,
+      headers: { cookie },
+      payload: { title: event.title, startsAt: null, language: "en" },
+    });
+    expect(res.json<EventDetail>().language).toBe("en");
+
+    const pub = await app.inject({ method: "GET", url: `/api/events/${event.slug}` });
+    expect(pub.json<PublicEvent>().language).toBe("en");
+    const presenterPath = event.presenterUrl.replace("http://comatch.test", "/api");
+    const presenter = await app.inject({ method: "GET", url: presenterPath });
+    expect(presenter.json<PresenterEvent>().language).toBe("en");
+
+    const bad = await app.inject({
+      method: "PUT",
+      url: `/api/admin/events/${event.id}`,
+      headers: { cookie },
+      payload: { title: event.title, language: "fr" },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(Object.keys(bad.json().issues)).toEqual(["language"]);
   });
 
   it("ändert allgemeine Einstellungen und prüft Grenzen", async () => {

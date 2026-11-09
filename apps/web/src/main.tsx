@@ -29,6 +29,8 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/e/:slug" element={<JoinPage />} />
           <Route path="/impressum" element={<ImprintPage />} />
           <Route path="/datenschutz" element={<PrivacyPage />} />
+          <Route path="/imprint" element={<ImprintPage language="en" />} />
+          <Route path="/privacy" element={<PrivacyPage language="en" />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

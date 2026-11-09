@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Spinner, cx } from "../../components/ui.tsx";
+import { LEGAL_PATHS, useLanguage, useT } from "../../i18n/index.tsx";
 import { useLegal } from "../../lib/legal.ts";
 import { fileToSelfieBlob, toSelfieBlob } from "../../lib/selfie.ts";
 import { PrimaryButton, SecondaryButton } from "./parts.tsx";
@@ -83,6 +84,8 @@ export function SelfieStep({
   const [photo, setPhoto] = usePhoto();
   const [consent, setConsent] = useState(!needsConsent);
   const legal = useLegal();
+  const t = useT();
+  const language = useLanguage();
   const [captureError, setCaptureError] = useState<string | null>(null);
 
   const capture = async () => {
@@ -92,7 +95,7 @@ export function SelfieStep({
       setPhoto(await toSelfieBlob(video, video.videoWidth, video.videoHeight));
       setCaptureError(null);
     } catch {
-      setCaptureError("Das Foto hat nicht geklappt. Bitte noch einmal versuchen.");
+      setCaptureError(t.selfie.captureFailed);
     }
   };
 
@@ -104,17 +107,17 @@ export function SelfieStep({
       setPhoto(await fileToSelfieBlob(file));
       setCaptureError(null);
     } catch {
-      setCaptureError("Dieses Bild kann ich nicht lesen. Bitte ein anderes Foto wählen.");
+      setCaptureError(t.selfie.fileUnreadable);
     }
   };
 
   return (
     <div className="flex flex-1 flex-col gap-5">
       <div>
-        <h2 className="text-2xl font-semibold">Zeig dich!</h2>
-        <p className="mt-1 text-slate-400">An deinem Selfie erkennt dich dein Match im Raum.</p>
+        <h2 className="text-2xl font-semibold">{t.selfie.title}</h2>
+        <p className="mt-1 text-slate-400">{t.selfie.intro}</p>
         <ul className="mt-3 flex flex-wrap gap-2 text-sm text-slate-300">
-          {["Gesicht gut sichtbar", "Keine Sonnenbrille", "Gern etwas vom Outfit"].map((tip) => (
+          {t.selfie.tips.map((tip) => (
             <li key={tip} className="rounded-full bg-white/5 px-3 py-1 ring-1 ring-white/10">
               {tip}
             </li>
@@ -134,10 +137,10 @@ export function SelfieStep({
           autoPlay
           muted
           playsInline
-          aria-label="Kamera-Vorschau"
+          aria-label={t.selfie.cameraPreview}
           className={`size-full -scale-x-100 object-cover ${photo || camera !== "live" ? "hidden" : ""}`}
         />
-        {photo && <img src={photo.url} alt="Dein Selfie" className="size-full object-cover" />}
+        {photo && <img src={photo.url} alt={t.selfie.yourSelfie} className="size-full object-cover" />}
         {!photo && camera === "starting" && (
           <div className="absolute inset-0 flex items-center justify-center text-slate-400">
             <Spinner />
@@ -148,9 +151,7 @@ export function SelfieStep({
             <span className="text-5xl" aria-hidden>
               🤳
             </span>
-            <p>
-              Die Kamera lässt sich hier nicht direkt öffnen. Mach das Foto einfach mit deiner Kamera-App.
-            </p>
+            <p>{t.selfie.cameraUnavailable}</p>
           </div>
         )}
       </div>
@@ -183,47 +184,44 @@ export function SelfieStep({
                   className="mt-0.5 size-5 shrink-0 accent-brand"
                 />
                 <span>
-                  Ich bin einverstanden, dass mein Foto und meine Antworten für dieses Event gespeichert und
-                  mein Foto meinen Matches sowie auf der Leinwand gezeigt wird. Das Foto wird spätestens{" "}
-                  {legal?.retentionHours ?? 24} Stunden nach dem Event gelöscht. Ich kann jederzeit
-                  aussteigen, dann wird alles sofort gelöscht.{" "}
+                  {t.selfie.consent(legal?.retentionHours ?? 24)}{" "}
                   <a
-                    href="/datenschutz"
+                    href={LEGAL_PATHS[language].privacy}
                     target="_blank"
                     rel="noreferrer"
                     className="text-slate-100 underline"
                   >
-                    Datenschutzerklärung
+                    {t.selfie.privacyPolicy}
                   </a>
                 </span>
               </label>
             )}
             <PrimaryButton disabled={!consent} busy={busy} onClick={() => onSubmit(photo.blob)}>
-              Foto verwenden
+              {t.selfie.usePhoto}
             </PrimaryButton>
             <SecondaryButton disabled={busy} onClick={() => setPhoto(null)}>
-              Nochmal
+              {t.selfie.again}
             </SecondaryButton>
           </>
         ) : camera === "live" ? (
           <>
-            <PrimaryButton onClick={() => void capture()}>Foto aufnehmen</PrimaryButton>
+            <PrimaryButton onClick={() => void capture()}>{t.selfie.takePhoto}</PrimaryButton>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               className="text-sm text-slate-400 underline-offset-4 hover:underline"
             >
-              Lieber ein Foto aus der Galerie wählen
+              {t.selfie.pickFromGallery}
             </button>
           </>
         ) : (
           <PrimaryButton disabled={camera === "starting"} onClick={() => fileRef.current?.click()}>
-            Kamera öffnen
+            {t.selfie.openCamera}
           </PrimaryButton>
         )}
         {onBack && !photo && (
           <SecondaryButton disabled={busy} onClick={onBack}>
-            Zurück
+            {t.common.back}
           </SecondaryButton>
         )}
       </div>

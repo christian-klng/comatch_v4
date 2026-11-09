@@ -81,6 +81,7 @@ describe("GET /api/present/:eventId", () => {
     expect(ok.json()).toEqual({
       id,
       title: "Test-Event",
+      language: "de",
       joinUrl: `http://comatch.test/e/${slug}`,
       logoUrl: null,
       primaryColor: null,

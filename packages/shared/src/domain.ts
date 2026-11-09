@@ -23,3 +23,12 @@ export type MatchGroupKind = (typeof MATCH_GROUP_KINDS)[number];
 
 export const MATCH_GROUP_STATUSES = ["open", "confirmed", "expired"] as const;
 export type MatchGroupStatus = (typeof MATCH_GROUP_STATUSES)[number];
+
+/** Sprache der Oberfläche für Teilnehmende und Leinwand. Die Fragen übersetzen Admins selbst. */
+export const LANGUAGES = ["de", "en"] as const;
+export type Language = (typeof LANGUAGES)[number];
+export const DEFAULT_LANGUAGE: Language = "de";
+
+export function isLanguage(value: unknown): value is Language {
+  return (LANGUAGES as readonly unknown[]).includes(value);
+}

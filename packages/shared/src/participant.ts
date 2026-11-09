@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { EventStatus, ParticipantStatus } from "./domain.ts";
+import type { EventStatus, Language, ParticipantStatus } from "./domain.ts";
 import { QUESTION_COUNT } from "./event-config.ts";
 
 /** Schutz gegen Missbrauch; geplant sind bis zu 100 Teilnehmende pro Event. */
@@ -27,6 +27,7 @@ export type JoinInput = z.infer<typeof joinInput>;
 export interface PublicEvent {
   slug: string;
   title: string;
+  language: Language;
   status: EventStatus;
   joinable: boolean;
   roundDurationS: number;

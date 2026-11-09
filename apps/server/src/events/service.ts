@@ -4,6 +4,7 @@ import {
   type EventCreateInput,
   type EventDetail,
   type EventSummary,
+  type Language,
   type QuestionInput,
 } from "@comatch/shared";
 import type { Db } from "../db/client.ts";
@@ -113,6 +114,7 @@ export async function getEventDetail(
 
   return {
     ...toSummary(row, count),
+    language: row.language,
     roundDurationS: row.roundDurationS,
     firstMatchDelayS: row.firstMatchDelayS,
     primaryColor: row.primaryColor,
@@ -168,7 +170,7 @@ export async function replaceQuestions(tx: Tx, eventId: string, questions: Quest
 
 export async function createEvent(
   db: Db,
-  input: EventCreateInput & { slug?: string },
+  input: Omit<EventCreateInput, "language"> & { language?: Language; slug?: string },
   createdBy: string | null,
   questions: QuestionInput[],
 ): Promise<string> {
@@ -183,6 +185,7 @@ export async function createEvent(
         slug,
         title: input.title,
         startsAt: input.startsAt ? new Date(input.startsAt) : null,
+        language: input.language,
         createdBy,
       })
       .returning({ id: event.id });

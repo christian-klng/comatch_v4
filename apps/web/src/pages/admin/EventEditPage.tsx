@@ -3,11 +3,13 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   LOGO_MAX_BYTES,
   IMAGE_MIME_TYPES,
+  LANGUAGES,
   MAX_ROUND_DURATION_S,
   MIN_ROUND_DURATION_S,
   questionsInput,
   type EventDetail,
   type EventGeneralInput,
+  type Language,
   type QuestionInput,
 } from "@comatch/shared";
 import { downloadQrPng, downloadQrSvg, QrCode } from "../../components/QrCode.tsx";
@@ -24,6 +26,7 @@ import {
   StatusBadge,
   cx,
 } from "../../components/ui.tsx";
+import { LANGUAGE_LABELS } from "../../i18n/index.tsx";
 import { api, ApiError, errorMessage } from "../../lib/api.ts";
 import { fromLocalInput, toLocalInput } from "../../lib/format.ts";
 import { useClipboard } from "../../lib/useClipboard.ts";
@@ -44,6 +47,7 @@ const generalOf = (e: EventDetail): EventGeneralInput => ({
   roundDurationS: e.roundDurationS,
   firstMatchDelayS: e.firstMatchDelayS,
   primaryColor: e.primaryColor,
+  language: e.language,
 });
 
 /** Gemeinsame Logik für Formulare mit Speichern-Button. */
@@ -176,6 +180,32 @@ function GeneralTab({ event, onSaved }: TabProps) {
               </div>
             </Field>
           </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field
+              label="Sprache"
+              htmlFor="language"
+              hint="Gilt für die Seiten der Teilnehmenden und die Leinwand. Die Fragen übersetzt ihr selbst."
+              error={issues.language}
+            >
+              <Select
+                id="language"
+                value={form.language}
+                onChange={(e) => update({ language: e.target.value as Language })}
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l} value={l}>
+                    {LANGUAGE_LABELS[l]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          {form.language !== event.language && (
+            <Alert tone="warning">
+              Die Fragen und Antworten werden nicht automatisch übersetzt. Bitte prüfe sie im Tab „Fragen“.
+              Wer die Seite schon offen hat, sieht die neue Sprache nach dem Neuladen.
+            </Alert>
+          )}
           <div className="flex items-center gap-3">
             <Button type="submit" busy={saver.busy} disabled={!dirty}>
               Speichern

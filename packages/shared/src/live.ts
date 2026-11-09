@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { EventStatus, MatchGroupKind, ParticipantStatus } from "./domain.ts";
+import type { EventStatus, Language, MatchGroupKind, ParticipantStatus } from "./domain.ts";
 
 /** Wer so lange keine Verbindung hatte, gilt als inaktiv und wird nicht mehr gepaart. */
 export const INACTIVE_AFTER_MS = 60_000;
@@ -144,6 +144,7 @@ export const LOBBY_SELFIES_LIMIT = 24;
 export interface PresenterEvent {
   id: string;
   title: string;
+  language: Language;
   joinUrl: string;
   logoUrl: string | null;
   primaryColor: string | null;

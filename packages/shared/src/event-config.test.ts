@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_QUESTIONS,
+  defaultQuestions,
   eventSettingsInput,
   normalizeComplements,
   questionsInput,
@@ -103,5 +104,26 @@ describe("normalizeComplements", () => {
 describe("DEFAULT_QUESTIONS", () => {
   it("sind gültig", () => {
     expect(questionsInput.safeParse(DEFAULT_QUESTIONS).success).toBe(true);
+    expect(questionsInput.safeParse(defaultQuestions("en")).success).toBe(true);
+  });
+
+  it("haben in jeder Sprache dieselbe Struktur", () => {
+    const shape = (questions: QuestionInput[]) =>
+      questions.map((q) => ({
+        mode: q.matchMode,
+        weight: q.weight,
+        complements: q.options.map((o) => o.complements),
+      }));
+    expect(shape(defaultQuestions("en"))).toEqual(shape(defaultQuestions("de")));
+    expect(defaultQuestions("de")).toBe(DEFAULT_QUESTIONS);
+  });
+});
+
+describe("eventGeneralInput", () => {
+  it("nimmt Deutsch als Standardsprache und lehnt unbekannte Sprachen ab", () => {
+    const base = { title: "x", questions: [question(), question(), question()] };
+    expect(eventSettingsInput.parse(base).language).toBe("de");
+    expect(eventSettingsInput.parse({ ...base, language: "en" }).language).toBe("en");
+    expect(eventSettingsInput.safeParse({ ...base, language: "fr" }).success).toBe(false);
   });
 });

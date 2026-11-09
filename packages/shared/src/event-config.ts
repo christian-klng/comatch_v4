@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MATCH_MODES } from "./domain.ts";
+import { DEFAULT_LANGUAGE, LANGUAGES, MATCH_MODES, type Language } from "./domain.ts";
 
 export const QUESTION_COUNT = 3;
 export const MIN_OPTIONS = 2;
@@ -67,9 +67,10 @@ export const eventGeneralInput = z.object({
     .default(DEFAULT_ROUND_DURATION_S),
   firstMatchDelayS: z.number().int().min(5).max(120).default(DEFAULT_FIRST_MATCH_DELAY_S),
   primaryColor: hexColor.nullable().default(null),
+  language: z.enum(LANGUAGES).default(DEFAULT_LANGUAGE),
 });
 
-export const eventCreateInput = eventGeneralInput.pick({ title: true, startsAt: true });
+export const eventCreateInput = eventGeneralInput.pick({ title: true, startsAt: true, language: true });
 
 /** Komplette Event-Konfiguration (z. B. für Seed und Vorlagen). */
 export const eventSettingsInput = eventGeneralInput.extend({ questions: questionsInput });
@@ -103,7 +104,7 @@ export function normalizeComplements(question: QuestionInput): QuestionInput {
   };
 }
 
-/** Beispielfragen für neue Events. */
+/** Beispielfragen für neue deutschsprachige Events. */
 export const DEFAULT_QUESTIONS: QuestionInput[] = [
   {
     text: "In welcher Phase ist dein Startup?",
@@ -138,3 +139,44 @@ export const DEFAULT_QUESTIONS: QuestionInput[] = [
     ],
   },
 ];
+
+/** Beispielfragen für neue englischsprachige Events (gleiche Struktur wie DEFAULT_QUESTIONS). */
+const DEFAULT_QUESTIONS_EN: QuestionInput[] = [
+  {
+    text: "What stage is your startup at?",
+    matchMode: "same",
+    weight: 1,
+    options: [
+      { label: "Idea", complements: [] },
+      { label: "Pre-Seed", complements: [] },
+      { label: "Seed", complements: [] },
+      { label: "Series A+", complements: [] },
+    ],
+  },
+  {
+    text: "What do you bring to the table?",
+    matchMode: "complementary",
+    weight: 1,
+    options: [
+      { label: "Tech", complements: [1] },
+      { label: "Business", complements: [0, 2] },
+      { label: "Design", complements: [1] },
+    ],
+  },
+  {
+    text: "Which industry?",
+    matchMode: "same",
+    weight: 1,
+    options: [
+      { label: "Climate", complements: [] },
+      { label: "Health", complements: [] },
+      { label: "Fintech", complements: [] },
+      { label: "Other", complements: [] },
+    ],
+  },
+];
+
+/** Beispielfragen in der Sprache des Events. */
+export function defaultQuestions(language: Language): QuestionInput[] {
+  return language === "en" ? DEFAULT_QUESTIONS_EN : DEFAULT_QUESTIONS;
+}

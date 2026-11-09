@@ -1,5 +1,5 @@
 // Antwort-Typen der HTTP-API.
-import type { EventStatus, MatchGroupKind, ParticipantStatus } from "./domain.ts";
+import type { EventStatus, Language, MatchGroupKind, ParticipantStatus } from "./domain.ts";
 import type { QuestionInput } from "./event-config.ts";
 
 export interface ApiErrorBody {
@@ -50,6 +50,7 @@ export interface EventSummary {
 }
 
 export interface EventDetail extends EventSummary {
+  language: Language;
   roundDurationS: number;
   firstMatchDelayS: number;
   primaryColor: string | null;

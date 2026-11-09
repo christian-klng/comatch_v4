@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import type { JoinResult, ParticipantMe, PublicEvent, SessionEndReason } from "@comatch/shared";
 import { Spinner, cx } from "../../components/ui.tsx";
-import { ApiError, api, errorMessage } from "../../lib/api.ts";
+import { I18nProvider, browserLanguage, errorText, messagesFor, useT } from "../../i18n/index.tsx";
+import { ApiError, api } from "../../lib/api.ts";
 import { loadDraftAnswers, loadToken, saveDraftAnswers, saveToken } from "../../lib/participantSession.ts";
 import { LegalLinks } from "../../components/LegalLinks.tsx";
 import { Message, PrimaryButton, Screen, SecondaryButton } from "./parts.tsx";
@@ -11,7 +12,7 @@ import { SelfieStep } from "./SelfieStep.tsx";
 
 type Phase =
   | { name: "loading" }
-  | { name: "failed"; message: string; notFound?: boolean }
+  | { name: "failed"; error: unknown; notFound?: boolean }
   | { name: "welcome" }
   | { name: "question"; index: number }
   | { name: "selfie" }
@@ -32,7 +33,7 @@ async function fetchSession(slug: string) {
     } catch (err) {
       if (!(err instanceof ApiError && err.status === 401)) throw err;
       saveToken(slug, null);
-      if (err.code === "participant_removed") notice = err.message;
+      if (err.code === "participant_removed") notice = errorText(messagesFor(event.language), err);
     }
   }
   return { event, token: me ? stored : null, me, notice };
@@ -49,35 +50,36 @@ function Welcome({
   onStart: () => void;
   onReload: () => void;
 }) {
+  const t = useT();
   if (event.status === "ended") {
     return (
-      <Message icon="🌙" title="Das Event ist vorbei">
-        Danke fürs Mitmachen!
+      <Message icon="🌙" title={t.join.endedTitle}>
+        {t.join.endedText}
       </Message>
     );
   }
   if (!event.joinable) {
     return (
       <>
-        <Message icon="⏳" title="Gleich geht’s los">
-          {event.title} ist noch nicht geöffnet. Probier es in ein paar Minuten noch einmal.
+        <Message icon="⏳" title={t.join.notOpenTitle}>
+          {t.join.notOpenText(event.title)}
         </Message>
-        <SecondaryButton onClick={onReload}>Neu laden</SecondaryButton>
+        <SecondaryButton onClick={onReload}>{t.join.reload}</SecondaryButton>
       </>
     );
   }
 
   const minutes = Math.round(event.roundDurationS / 60);
   const steps = [
-    ["💬", "Drei kurze Fragen", "Damit wir passende Leute für dich finden."],
-    ["🤳", "Ein Selfie", "Daran erkennt dich dein Match im Raum."],
-    ["🤝", `Alle ${minutes} Minuten ein Match`, "Findet euch, vergleicht eure Codes, redet."],
+    ["💬", t.join.stepQuestionsTitle, t.join.stepQuestionsText],
+    ["🤳", t.join.stepSelfieTitle, t.join.stepSelfieText],
+    ["🤝", t.join.stepMatchTitle(minutes), t.join.stepMatchText],
   ] as const;
 
   return (
     <>
       <div className="mt-4">
-        <p className="text-sm font-medium tracking-wide text-brand uppercase">Willkommen bei</p>
+        <p className="text-sm font-medium tracking-wide text-brand uppercase">{t.join.welcome}</p>
         <h1 className="mt-1 text-3xl leading-tight font-bold">{event.title}</h1>
       </div>
       <ol className="flex flex-col gap-3">
@@ -93,9 +95,9 @@ function Welcome({
           </li>
         ))}
       </ol>
-      <p className="text-center text-sm text-slate-500">Ohne Namen, ohne Konto, ohne App.</p>
+      <p className="text-center text-sm text-slate-500">{t.join.noAccount}</p>
       <PrimaryButton className="mt-auto" onClick={onStart}>
-        Los geht’s
+        {t.join.start}
       </PrimaryButton>
       <LegalLinks className="-mt-2 text-center text-xs text-slate-500" />
     </>
@@ -115,14 +117,13 @@ function QuestionStep({
   onSelect: (optionId: string) => void;
   onBack: () => void;
 }) {
+  const t = useT();
   const question = event.questions[index]!;
   const total = event.questions.length;
   return (
     <>
       <div>
-        <p className="text-sm text-slate-400">
-          Frage {index + 1} von {total}
-        </p>
+        <p className="text-sm text-slate-400">{t.join.questionOf(index + 1, total)}</p>
         <div className="mt-2 flex gap-1.5" aria-hidden>
           {event.questions.map((q, i) => (
             <span
@@ -154,7 +155,7 @@ function QuestionStep({
         })}
       </div>
       <SecondaryButton className="mt-auto" onClick={onBack}>
-        Zurück
+        {t.common.back}
       </SecondaryButton>
     </>
   );
@@ -173,6 +174,9 @@ export function JoinPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const advanceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Vor dem Laden des Events (und wenn es fehlt) gilt die Sprache des Browsers.
+  const language = event?.language ?? browserLanguage();
+  const t = messagesFor(language);
 
   const resetSession = useCallback(() => {
     saveToken(slug, null);
@@ -195,12 +199,7 @@ export function JoinPage() {
         setPhase(next);
       },
       (err: unknown) => {
-        const notFound = err instanceof ApiError && err.status === 404;
-        setPhase({
-          name: "failed",
-          notFound,
-          message: notFound ? "Prüf den Link oder scanne den QR-Code noch einmal." : errorMessage(err),
-        });
+        setPhase({ name: "failed", notFound: err instanceof ApiError && err.status === 404, error: err });
       },
     );
   }, [slug]);
@@ -251,14 +250,14 @@ export function JoinPage() {
       if (err instanceof ApiError && err.code === "questions_changed") {
         setAnswers({});
         saveDraftAnswers(slug, null);
-        setNotice(err.message);
+        setNotice(errorText(t, err));
         reload();
       } else if (err instanceof ApiError && err.status === 401) {
         resetSession();
-        setNotice(err.message);
+        setNotice(errorText(t, err));
         setPhase({ name: "welcome" });
       } else {
-        setError(errorMessage(err));
+        setError(errorText(t, err));
       }
     } finally {
       setBusy(false);
@@ -269,23 +268,17 @@ export function JoinPage() {
   const sessionInvalid = useCallback(
     (reason: SessionEndReason) => {
       resetSession();
-      setNotice(
-        reason === "removed"
-          ? "Die Moderation hat dich aus dem Event entfernt."
-          : "Deine Sitzung ist abgelaufen. Du kannst neu beitreten.",
-      );
+      setNotice(reason === "removed" ? t.errors.participant_removed : t.join.sessionExpired);
       setPhase({ name: "welcome" });
     },
-    [resetSession],
+    [resetSession, t],
   );
 
   const selfieReset = useCallback(() => {
-    setNotice(
-      "Die Moderation bittet dich um ein neues Selfie. Achte darauf, dass dein Gesicht gut zu sehen ist.",
-    );
+    setNotice(t.join.newSelfieRequested);
     setMe((current) => (current ? { ...current, status: "onboarding", selfieUrl: null } : current));
     setPhase({ name: "selfie" });
-  }, []);
+  }, [t]);
 
   const leave = async () => {
     await api("/participant", { method: "DELETE", token: token! });
@@ -296,103 +289,109 @@ export function JoinPage() {
 
   if (phase.name === "loading") {
     return (
-      <Screen>
-        <div className="flex flex-1 items-center justify-center text-slate-400">
-          <Spinner className="size-8" />
-        </div>
-      </Screen>
+      <I18nProvider language={language}>
+        <Screen>
+          <div className="flex flex-1 items-center justify-center text-slate-400">
+            <Spinner className="size-8" />
+          </div>
+        </Screen>
+      </I18nProvider>
     );
   }
   if (phase.name === "failed" || !event) {
     const failed = phase.name === "failed" ? phase : null;
     return (
-      <Screen>
-        <Message icon="🤔" title={failed?.notFound ? "Event nicht gefunden" : "Das hat nicht geklappt"}>
-          {failed?.message}
-        </Message>
-        {!failed?.notFound && <SecondaryButton onClick={reload}>Erneut versuchen</SecondaryButton>}
-      </Screen>
+      <I18nProvider language={language}>
+        <Screen>
+          <Message icon="🤔" title={failed?.notFound ? t.join.eventNotFound : t.join.failed}>
+            {failed?.notFound ? t.errors.event_not_found : errorText(t, failed?.error)}
+          </Message>
+          {!failed?.notFound && <SecondaryButton onClick={reload}>{t.common.retry}</SecondaryButton>}
+        </Screen>
+      </I18nProvider>
     );
   }
 
   return (
-    <Screen
-      color={event.primaryColor}
-      logoUrl={event.logoUrl}
-      title={phase.name === "welcome" ? undefined : event.title}
-    >
-      {notice && (
-        <p role="status" className="rounded-xl bg-amber-500/15 px-4 py-3 text-sm text-amber-100">
-          {notice}
-        </p>
-      )}
+    <I18nProvider language={language}>
+      <Screen
+        color={event.primaryColor}
+        logoUrl={event.logoUrl}
+        title={phase.name === "welcome" ? undefined : event.title}
+      >
+        {notice && (
+          <p role="status" className="rounded-xl bg-amber-500/15 px-4 py-3 text-sm text-amber-100">
+            {notice}
+          </p>
+        )}
 
-      {phase.name === "welcome" && (
-        <Welcome
-          event={event}
-          onReload={reload}
-          onStart={() => {
-            setNotice(null);
-            setPhase({ name: "question", index: 0 });
-          }}
-        />
-      )}
+        {phase.name === "welcome" && (
+          <Welcome
+            event={event}
+            onReload={reload}
+            onStart={() => {
+              setNotice(null);
+              setPhase({ name: "question", index: 0 });
+            }}
+          />
+        )}
 
-      {phase.name === "question" && (
-        <QuestionStep
-          key={phase.index}
-          event={event}
-          index={phase.index}
-          selected={answers[event.questions[phase.index]!.id]}
-          onSelect={(optionId) => selectAnswer(phase.index, optionId)}
-          onBack={() => {
-            clearTimeout(advanceTimer.current);
-            setPhase(phase.index === 0 ? { name: "welcome" } : { name: "question", index: phase.index - 1 });
-          }}
-        />
-      )}
+        {phase.name === "question" && (
+          <QuestionStep
+            key={phase.index}
+            event={event}
+            index={phase.index}
+            selected={answers[event.questions[phase.index]!.id]}
+            onSelect={(optionId) => selectAnswer(phase.index, optionId)}
+            onBack={() => {
+              clearTimeout(advanceTimer.current);
+              setPhase(
+                phase.index === 0 ? { name: "welcome" } : { name: "question", index: phase.index - 1 },
+              );
+            }}
+          />
+        )}
 
-      {phase.name === "selfie" && (
-        <SelfieStep
-          needsConsent={!token}
-          busy={busy}
-          error={error}
-          onSubmit={(photo) => void submitSelfie(photo)}
-          onBack={
-            me?.selfieUrl
-              ? () => setPhase({ name: "ready" })
-              : token
-                ? undefined
-                : () => setPhase({ name: "question", index: event.questions.length - 1 })
-          }
-        />
-      )}
+        {phase.name === "selfie" && (
+          <SelfieStep
+            needsConsent={!token}
+            busy={busy}
+            error={error}
+            onSubmit={(photo) => void submitSelfie(photo)}
+            onBack={
+              me?.selfieUrl
+                ? () => setPhase({ name: "ready" })
+                : token
+                  ? undefined
+                  : () => setPhase({ name: "question", index: event.questions.length - 1 })
+            }
+          />
+        )}
 
-      {phase.name === "ready" && me && token && (
-        <LiveView
-          event={event}
-          me={me}
-          token={token}
-          onChangeSelfie={() => {
-            setError(null);
-            setPhase({ name: "selfie" });
-          }}
-          onLeave={leave}
-          onSessionInvalid={sessionInvalid}
-          onSelfieReset={selfieReset}
-        />
-      )}
+        {phase.name === "ready" && me && token && (
+          <LiveView
+            event={event}
+            me={me}
+            token={token}
+            onChangeSelfie={() => {
+              setError(null);
+              setPhase({ name: "selfie" });
+            }}
+            onLeave={leave}
+            onSessionInvalid={sessionInvalid}
+            onSelfieReset={selfieReset}
+          />
+        )}
 
-      {phase.name === "left" && (
-        <>
-          <Message icon="👋" title="Du bist ausgestiegen">
-            Dein Foto und deine Antworten sind gelöscht.
-          </Message>
-          <SecondaryButton onClick={() => setPhase({ name: "welcome" })}>
-            Doch wieder mitmachen
-          </SecondaryButton>
-        </>
-      )}
-    </Screen>
+        {phase.name === "left" && (
+          <>
+            <Message icon="👋" title={t.join.leftTitle}>
+              {t.join.leftText}
+            </Message>
+            <SecondaryButton onClick={() => setPhase({ name: "welcome" })}>{t.join.rejoin}</SecondaryButton>
+          </>
+        )}
+      </Screen>
+    </I18nProvider>
   );
 }

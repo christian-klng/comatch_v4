@@ -1,89 +1,33 @@
 // Impressum und Datenschutzerklärung. Die Betreiber-Angaben kommen aus der Server-Konfiguration
 // (LEGAL_*). Der Text der Datenschutzerklärung ist ein Entwurf, der zur App passt; vor dem
 // Produktivbetrieb mit einer Datenschutzberatung abstimmen.
-import type { ReactNode } from "react";
-import { Link } from "react-router";
-import type { LegalInfo } from "@comatch/shared";
+import type { Language, LegalInfo } from "@comatch/shared";
 import { Spinner } from "../../components/ui.tsx";
+import { messagesFor } from "../../i18n/index.tsx";
 import { useLegal } from "../../lib/legal.ts";
+import { PrivacyEn } from "./PrivacyEn.tsx";
+import { Missing, Operator, Section, Shell } from "./parts.tsx";
 
 const STAND = "28.10.2026";
+const STAND_EN = "28 October 2026";
 
-function Shell({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="min-h-full bg-white text-slate-800">
-      <main className="mx-auto flex max-w-2xl flex-col gap-6 px-5 py-10 text-[15px] leading-relaxed">
-        <p className="text-sm">
-          <span className="font-semibold">
-            Co<span className="text-brand">Match</span>
-          </span>
-        </p>
-        <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
-        {children}
-        <nav className="mt-6 flex gap-4 border-t border-slate-200 pt-4 text-sm text-slate-500">
-          <Link to="/impressum" className="hover:text-slate-900">
-            Impressum
-          </Link>
-          <Link to="/datenschutz" className="hover:text-slate-900">
-            Datenschutz
-          </Link>
-        </nav>
-      </main>
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Missing() {
-  return (
-    <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">
-      Die Angaben des Betreibers sind noch nicht hinterlegt (LEGAL_NAME, LEGAL_ADDRESS, LEGAL_EMAIL).
-    </p>
-  );
-}
-
-function Operator({ legal }: { legal: LegalInfo }) {
-  return (
-    <address className="not-italic">
-      {legal.name && <p className="font-medium">{legal.name}</p>}
-      {legal.address?.split(/\n|,\s*/).map((line) => (
-        <p key={line}>{line}</p>
-      ))}
-      {legal.email && (
-        <p>
-          E-Mail:{" "}
-          <a href={`mailto:${legal.email}`} className="text-brand underline">
-            {legal.email}
-          </a>
-        </p>
-      )}
-      {legal.phone && <p>Telefon: {legal.phone}</p>}
-    </address>
-  );
-}
-
-export function ImprintPage() {
+export function ImprintPage({ language = "de" }: { language?: Language }) {
   const legal = useLegal();
+  const t = messagesFor(language).legal;
   return (
-    <Shell title="Impressum">
+    <Shell language={language} title={t.imprintTitle}>
       {!legal ? (
         <Spinner className="text-slate-400" />
       ) : (
         <>
-          {!legal.configured && <Missing />}
-          <Section title="Angaben gemäß § 5 DDG">
-            <Operator legal={legal} />
+          {!legal.configured && <Missing language={language} />}
+          <Section title={t.imprintOperator}>
+            <Operator legal={legal} language={language} />
           </Section>
-          <Section title="Verantwortlich für den Inhalt">
-            <p>{legal.name ?? "–"}, Anschrift wie oben.</p>
+          <Section title={t.imprintResponsible}>
+            <p>
+              {legal.name ?? "–"}, {t.sameAddress}
+            </p>
           </Section>
         </>
       )}
@@ -91,19 +35,30 @@ export function ImprintPage() {
   );
 }
 
-export function PrivacyPage() {
+export function PrivacyPage({ language = "de" }: { language?: Language }) {
   const legal = useLegal();
-  if (!legal) {
-    return (
-      <Shell title="Datenschutz">
+  const title = messagesFor(language).legal.privacyTitle;
+  return (
+    <Shell language={language} title={title}>
+      {!legal ? (
         <Spinner className="text-slate-400" />
-      </Shell>
-    );
-  }
+      ) : (
+        <>
+          {!legal.configured && <Missing language={language} />}
+          {language === "en" ? <PrivacyEn legal={legal} /> : <PrivacyDe legal={legal} />}
+          <p className="text-sm text-slate-500">
+            {language === "en" ? `Last updated: ${STAND_EN}` : `Stand: ${STAND}`}
+          </p>
+        </>
+      )}
+    </Shell>
+  );
+}
+
+function PrivacyDe({ legal }: { legal: LegalInfo }) {
   const hours = legal.retentionHours;
   return (
-    <Shell title="Datenschutz">
-      {!legal.configured && <Missing />}
+    <>
       <p>
         CoMatch bringt Teilnehmende einer Veranstaltung für kurze Gespräche zusammen. Die App kommt bewusst
         mit wenigen Daten aus: kein Name, keine E-Mail-Adresse, kein Konto, keine Kontaktdaten und kein
@@ -111,7 +66,7 @@ export function PrivacyPage() {
       </p>
 
       <Section title="1. Verantwortlich">
-        <Operator legal={legal} />
+        <Operator legal={legal} language="de" />
         {legal.dpo && <p>Datenschutzbeauftragte*r: {legal.dpo}</p>}
       </Section>
 
@@ -203,8 +158,6 @@ export function PrivacyPage() {
           Bundesland, in dem du wohnst oder in dem das Event stattfindet.
         </p>
       </Section>
-
-      <p className="text-sm text-slate-500">Stand: {STAND}</p>
-    </Shell>
+    </>
   );
 }
