@@ -106,6 +106,9 @@ export const event = pgTable("event", {
   logoMime: text(),
   logoUpdatedAt: timestamp({ withTimezone: true }),
   primaryColor: text(),
+  /** Bezeichnung der Teilnehmenden auf der Leinwand; leer: Standard der Sprache. */
+  participantTermSingular: text(),
+  participantTermPlural: text(),
   createdBy: uuid().references(() => adminUser.id, { onDelete: "set null" }),
   createdAt: createdAt(),
   endedAt: timestamp({ withTimezone: true }),

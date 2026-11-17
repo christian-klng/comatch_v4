@@ -187,6 +187,18 @@ export function LiveView({
   useWakeLock();
   useVibrate(state);
 
+  // Jede Berührung zeigt dem Server, dass das Handy nicht nur irgendwo herumliegt.
+  const { touch } = live;
+  useEffect(() => {
+    const onTouch = () => touch();
+    window.addEventListener("pointerdown", onTouch);
+    window.addEventListener("keydown", onTouch);
+    return () => {
+      window.removeEventListener("pointerdown", onTouch);
+      window.removeEventListener("keydown", onTouch);
+    };
+  }, [touch]);
+
   useEffect(() => {
     if (live.invalid) onSessionInvalid(live.invalid);
   }, [live.invalid, onSessionInvalid]);
@@ -217,6 +229,18 @@ export function LiveView({
         <Message icon="☕" title={t.live.pauseTitle}>
           {t.live.pauseText}
         </Message>
+        <Footer onChangeSelfie={onChangeSelfie} onLeave={onLeave} />
+      </>
+    );
+  }
+  if (state?.status === "inactive") {
+    return (
+      <>
+        {offline}
+        <Message icon="👋" title={t.live.idleTitle}>
+          {t.live.idleText}
+        </Message>
+        <PrimaryButton onClick={() => touch(true)}>{t.live.idleBack}</PrimaryButton>
         <Footer onChangeSelfie={onChangeSelfie} onLeave={onLeave} />
       </>
     );

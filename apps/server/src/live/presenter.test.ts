@@ -85,6 +85,8 @@ describe("GET /api/present/:eventId", () => {
       joinUrl: `http://comatch.test/e/${slug}`,
       logoUrl: null,
       primaryColor: null,
+      participantTermSingular: null,
+      participantTermPlural: null,
     });
 
     expect((await app.inject({ url: `/api/present/${id}?token=falsch` })).statusCode).toBe(404);

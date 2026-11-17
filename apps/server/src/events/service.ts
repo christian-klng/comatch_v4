@@ -118,6 +118,8 @@ export async function getEventDetail(
     roundDurationS: row.roundDurationS,
     firstMatchDelayS: row.firstMatchDelayS,
     primaryColor: row.primaryColor,
+    participantTermSingular: row.participantTermSingular,
+    participantTermPlural: row.participantTermPlural,
     logoUrl: row.logoUpdatedAt ? `/api/events/${row.slug}/logo?v=${row.logoUpdatedAt.getTime()}` : null,
     joinUrl: `${publicBaseUrl}/e/${row.slug}`,
     presenterUrl: `${publicBaseUrl}/present/${row.id}?token=${row.presenterToken}`,

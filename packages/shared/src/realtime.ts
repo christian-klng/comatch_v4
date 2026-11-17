@@ -28,4 +28,6 @@ export interface ServerToClientEvents {
 export interface ClientToServerEvents {
   /** Antwortet mit der aktuellen Serverzeit (für wiederholte Zeit-Synchronisation). */
   ping: (ack: (payload: ServerHello) => void) => void;
+  /** Das Handy wird benutzt (Berührung). Holt auch zurück, wer wegen Untätigkeit inaktiv wurde. */
+  activity: () => void;
 }

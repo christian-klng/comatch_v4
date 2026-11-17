@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 import {
   EXTEND_ROUND_MS,
+  IDLE_ROUNDS_LIMIT,
   type ConfirmCodeResult,
   type EventControlAction,
   type EventLive,
@@ -28,6 +29,7 @@ import {
   loadRoundGroups,
   loadSnapshot,
   rewriteMembers,
+  type GroupView,
   type LiveEventRow,
 } from "./repository.ts";
 import { buildEventLive, buildParticipantLive, isPresent } from "./views.ts";
@@ -83,11 +85,19 @@ export class LiveEvents {
   private readonly connections = new Map<string, { eventId: string; count: number }>();
   /** Zuletzt gesendeter Zustand je Person (ohne Serverzeit), um Wiederholungen zu sparen. */
   private readonly lastSent = new Map<string, string>();
+  /** Letzte Berührung des Handys je Person (ms). Fehlt der Eintrag, gilt der Start dieses Prozesses. */
+  private readonly lastActive = new Map<string, number>();
+  /** Runden in Folge mit unbestätigtem Match und unberührtem Handy. */
+  private readonly idleRounds = new Map<string, number>();
+  /** Wegen Untätigkeit inaktiv: zurück geht es nur per Berührung, nicht durch bloßes Wiederverbinden. */
+  private readonly idleOut = new Set<string>();
+  private readonly bootedAt: number;
 
   private deps: LiveDeps;
 
   constructor(deps: LiveDeps) {
     this.deps = deps;
+    this.bootedAt = deps.clock.now();
   }
 
   attach(emitter: Emitter) {
@@ -204,6 +214,9 @@ export class LiveEvents {
     this.stop();
     this.connections.clear();
     this.lastSent.clear();
+    this.lastActive.clear();
+    this.idleRounds.clear();
+    this.idleOut.clear();
   }
 
   /** Alle Timer stoppen (Herunterfahren, Tests). Verbindungen bleiben unberührt. */
@@ -311,16 +324,24 @@ export class LiveEvents {
 
   /**
    * Beendet die laufende Runde (offene Matches verfallen) und paart alle aktiven Personen neu.
-   * Wer länger weg war, wird inaktiv und bleibt außen vor.
+   * Wer länger weg war oder das Handy mehrere Runden nicht benutzt hat, wird inaktiv und bleibt
+   * außen vor.
    */
   private async startRound(eventId: string, starting = false) {
     const { db, clock } = this.deps;
     const now = clock.now();
     const connected = this.connectedIds();
 
-    const ev = await db.transaction(async (tx) => {
+    const { ev, idle } = await db.transaction(async (tx) => {
       const ev = await loadLiveEvent(tx, eventId, true);
       if (!ev) throw notFound("event_not_found");
+
+      const endingRound = await currentRoundRow(tx, ev);
+      const idle = this.idleAfterRound(
+        endingRound?.startedAt.getTime() ?? now,
+        await loadRoundGroups(tx, endingRound?.id ?? null),
+      );
+      const idleOut = (id: string) => this.idleOut.has(id) || (idle.get(id) ?? 0) >= IDLE_ROUNDS_LIMIT;
 
       await tx
         .update(matchGroup)
@@ -331,8 +352,9 @@ export class LiveEvents {
         .select()
         .from(participant)
         .where(and(eq(participant.eventId, eventId), inArray(participant.status, [...PAIRABLE])));
-      const active = candidates.filter((p) => isPresent(p, connected, now));
-      const gone = candidates.filter((p) => !isPresent(p, connected, now)).map((p) => p.id);
+      const isActive = (p: (typeof candidates)[number]) => isPresent(p, connected, now) && !idleOut(p.id);
+      const active = candidates.filter(isActive);
+      const gone = candidates.filter((p) => !isActive(p)).map((p) => p.id);
       if (gone.length > 0) {
         await tx
           .update(participant)
@@ -378,10 +400,37 @@ export class LiveEvents {
         ...(starting ? { status: "running" as const } : {}),
       };
       await tx.update(event).set(update).where(eq(event.id, eventId));
-      return { ...ev, ...update };
+      return { ev: { ...ev, ...update }, idle };
     });
 
+    // Erst nach dem Commit merken, damit ein wiederholter Rundenwechsel nicht doppelt zählt.
+    for (const [id, rounds] of idle) {
+      if (rounds >= IDLE_ROUNDS_LIMIT) {
+        this.idleOut.add(id);
+        this.idleRounds.delete(id);
+      } else if (rounds > 0) this.idleRounds.set(id, rounds);
+      else this.idleRounds.delete(id);
+    }
     this.schedule(ev);
+  }
+
+  /**
+   * Zählt für die endende Runde, wer untätig war: Match bis zuletzt offen, selbst keinen Code
+   * versucht, von niemandem bestätigt und das Handy seit Rundenbeginn nicht berührt. Gibt den
+   * neuen Zählerstand je Person zurück (0: war aktiv). Wer kein Match hatte, kommt nicht vor.
+   */
+  private idleAfterRound(roundStartedAt: number, groups: readonly GroupView[]): Map<string, number> {
+    const result = new Map<string, number>();
+    for (const g of groups) {
+      if (g.status === "expired") continue;
+      for (const m of g.members) {
+        const found = g.members.some((o) => o.confirmsParticipantId === m.participantId && o.confirmedAt);
+        const touched = (this.lastActive.get(m.participantId) ?? this.bootedAt) >= roundStartedAt;
+        const idle = g.status === "open" && !m.confirmedAt && m.wrongAttempts === 0 && !found && !touched;
+        result.set(m.participantId, idle ? (this.idleRounds.get(m.participantId) ?? 0) + 1 : 0);
+      }
+    }
+    return result;
   }
 
   /** Schnellmatch für Wartende während einer Runde. Gibt zurück, ob neue Matches entstanden sind. */
@@ -455,6 +504,7 @@ export class LiveEvents {
     eventId: string,
     input: { participantId: string; matchId: string; code: string },
   ): Promise<ConfirmCodeResult> {
+    this.touch(input.participantId);
     return this.run(eventId, async () => {
       const { db, clock } = this.deps;
       const ev = await loadLiveEvent(db, eventId);
@@ -468,6 +518,7 @@ export class LiveEvents {
 
   /** „Nicht gefunden“: raus aus dem Match und gleich nach einem neuen suchen. */
   giveUp(eventId: string, input: { participantId: string; matchId: string }): Promise<ParticipantLive> {
+    this.touch(input.participantId);
     return this.run(eventId, async () => {
       const { db, clock } = this.deps;
       const ev = await loadLiveEvent(db, eventId);
@@ -586,7 +637,30 @@ export class LiveEvents {
     return new Set(this.connections.keys());
   }
 
-  /** Ein Handy hat sich verbunden. Wer inaktiv war, kommt zurück in den Pool. */
+  private touch(participantId: string) {
+    this.lastActive.set(participantId, this.deps.clock.now());
+    this.idleRounds.delete(participantId);
+  }
+
+  /**
+   * Das Handy wurde berührt. Wer wegen Untätigkeit inaktiv war, kommt zurück in den Pool.
+   */
+  activity(participantId: string, eventId: string): Promise<void> {
+    this.touch(participantId);
+    if (!this.idleOut.delete(participantId)) return Promise.resolve();
+    return this.run(eventId, async () => {
+      await this.deps.db
+        .update(participant)
+        .set({ status: "pool", poolSince: new Date(this.deps.clock.now()) })
+        .where(and(eq(participant.id, participantId), eq(participant.status, "inactive")));
+      await this.broadcast(eventId);
+    });
+  }
+
+  /**
+   * Ein Handy hat sich verbunden. Wer wegen einer Trennung inaktiv war, kommt zurück in den Pool;
+   * wer wegen Untätigkeit inaktiv ist, muss sich erst per Berührung zurückmelden.
+   */
   connect(participantId: string, eventId: string): Promise<void> {
     const entry = this.connections.get(participantId) ?? { eventId, count: 0 };
     entry.count++;
@@ -600,7 +674,7 @@ export class LiveEvents {
         .set({ lastSeenAt: now })
         .where(eq(participant.id, participantId))
         .returning({ status: participant.status });
-      if (row?.status === "inactive") {
+      if (row?.status === "inactive" && !this.idleOut.has(participantId)) {
         await db
           .update(participant)
           .set({ status: "pool", poolSince: now })

@@ -54,6 +54,9 @@ export interface EventDetail extends EventSummary {
   roundDurationS: number;
   firstMatchDelayS: number;
   primaryColor: string | null;
+  /** Bezeichnung der Teilnehmenden auf der Leinwand (Einzahl/Mehrzahl); null: Standard der Sprache. */
+  participantTermSingular: string | null;
+  participantTermPlural: string | null;
   /** URL des Logos (mit Cache-Buster) oder null. */
   logoUrl: string | null;
   joinUrl: string;

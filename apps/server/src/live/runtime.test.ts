@@ -203,6 +203,33 @@ describe("Anwesenheit", () => {
     expect(await statusOf(people[0]!.id)).toBe("pool");
   });
 
+  it("setzt nach zwei untätigen Runden aus, bis die Person ihr Handy wieder berührt", async () => {
+    const { id } = await t.createEvent("open");
+    const people = await addReady(id, 4);
+    const [idler, ...others] = people.map((p) => p.id);
+    const touchOthers = () => Promise.all(others.map((o) => t.live.activity(o, id)));
+    await t.live.control(id, "start");
+
+    // Runde 1 und 2: Das Handy bleibt verbunden, wird aber nie berührt.
+    await touchOthers();
+    await t.advance(ROUND_MS);
+    expect(await statusOf(idler!)).toBe("matched");
+    await touchOthers();
+    await t.advance(ROUND_MS);
+
+    expect(await statusOf(idler!)).toBe("inactive");
+    expect(t.emits.lastFor(idler!)).toMatchObject({ status: "inactive", match: null });
+    expect(t.emits.lastFor(others[0]!)!.match!.partners).toHaveLength(2);
+
+    // Bloßes Wiederverbinden reicht nicht, eine Berührung schon.
+    await t.live.disconnect(idler!, id);
+    await t.live.connect(idler!, id);
+    await t.live.idle();
+    expect(await statusOf(idler!)).toBe("inactive");
+    await t.live.activity(idler!, id);
+    expect(await statusOf(idler!)).toBe("pool");
+  });
+
   it("zählt kurz Abwesende (z. B. gesperrtes Handy) weiter als aktiv", async () => {
     const { id } = await t.createEvent("open");
     const people = await addReady(id, 2);

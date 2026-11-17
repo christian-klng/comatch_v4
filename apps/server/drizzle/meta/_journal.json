@@ -57,6 +57,13 @@
       "when": 1794236505831,
       "tag": "0007_event_language",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794905520173,
+      "tag": "0008_event_participant_term",
+      "breakpoints": true
     }
   ]
 }

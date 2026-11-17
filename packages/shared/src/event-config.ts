@@ -53,6 +53,16 @@ export const questionInput = z
 
 export const questionsInput = z.array(questionInput).length(QUESTION_COUNT);
 
+export const PARTICIPANT_TERM_MAX = 40;
+/** Bezeichnung der Teilnehmenden auf der Leinwand; leer heißt Standard der Sprache. */
+const participantTerm = z
+  .string()
+  .trim()
+  .max(PARTICIPANT_TERM_MAX)
+  .nullable()
+  .default(null)
+  .transform((value) => value || null);
+
 const hexColor = z.string().regex(/^#[0-9a-f]{6}$/i, "Farbe im Format #RRGGBB angeben.");
 
 /** Allgemeine Einstellungen, die jederzeit geändert werden dürfen. */
@@ -68,6 +78,9 @@ export const eventGeneralInput = z.object({
   firstMatchDelayS: z.number().int().min(5).max(120).default(DEFAULT_FIRST_MATCH_DELAY_S),
   primaryColor: hexColor.nullable().default(null),
   language: z.enum(LANGUAGES).default(DEFAULT_LANGUAGE),
+  /** Z. B. „Gründer*in“ / „Gründer*innen“ für den Zähler „42 Gründer*innen sind dabei“. */
+  participantTermSingular: participantTerm,
+  participantTermPlural: participantTerm,
 });
 
 export const eventCreateInput = eventGeneralInput.pick({ title: true, startsAt: true, language: true });

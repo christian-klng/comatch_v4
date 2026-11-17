@@ -103,7 +103,12 @@ function Lobby({ info, state }: { info: PresenterEvent; state: EventLive | null 
         </div>
         <p className="text-[4.5vh] text-slate-300">
           <span className="text-[12vh] leading-none font-bold text-brand tabular-nums">{joined}</span>{" "}
-          {t.present.joined(joined)}
+          {t.present.joined(
+            joined,
+            joined === 1
+              ? (info.participantTermSingular ?? t.present.participantSingular)
+              : (info.participantTermPlural ?? t.present.participantPlural),
+          )}
         </p>
         {state && state.selfies.length > 0 && (
           <div className="flex flex-wrap gap-[1.2vh]" aria-hidden>

@@ -72,6 +72,8 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
         primaryColor: input.primaryColor,
         // Wirkt bei Teilnehmenden und auf der Leinwand beim nächsten Laden der Seite.
         language: input.language,
+        participantTermSingular: input.participantTermSingular,
+        participantTermPlural: input.participantTermPlural,
       })
       .where(eq(event.id, id));
     return detail(id);

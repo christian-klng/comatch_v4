@@ -4,6 +4,14 @@ import type { EventStatus, Language, MatchGroupKind, ParticipantStatus } from ".
 /** Wer so lange keine Verbindung hatte, gilt als inaktiv und wird nicht mehr gepaart. */
 export const INACTIVE_AFTER_MS = 60_000;
 
+/**
+ * Wer so viele Runden in Folge ein Match hatte, es nicht bestätigt und das Handy nicht berührt
+ * hat, gilt als weggegangen und wird inaktiv, bis die Person sich zurückmeldet.
+ */
+export const IDLE_ROUNDS_LIMIT = 2;
+/** So oft meldet das Handy höchstens, dass es benutzt wird. */
+export const ACTIVITY_THROTTLE_MS = 20_000;
+
 /** Kurz vor Rundenende lohnt kein neues Match mehr; Wartende kommen in die nächste Runde. */
 export const POOL_CUTOFF_MS = 60_000;
 
@@ -53,6 +61,10 @@ export interface LiveClock {
 export interface ParticipantLive {
   serverNow: number;
   clock: LiveClock;
+  /**
+   * „inactive“ bei offener Verbindung heißt: Das Handy war zu lange unbenutzt. Die Person meldet
+   * sich mit einer Berührung zurück (Socket-Ereignis „activity“).
+   */
   status: ParticipantStatus;
   /** Wie viele Personen gerade aktiv mitmachen (für „Du bist die erste Person“). */
   activeParticipants: number;
@@ -148,4 +160,7 @@ export interface PresenterEvent {
   joinUrl: string;
   logoUrl: string | null;
   primaryColor: string | null;
+  /** Bezeichnung der Teilnehmenden (Einzahl/Mehrzahl); null: Standard der Sprache. */
+  participantTermSingular: string | null;
+  participantTermPlural: string | null;
 }

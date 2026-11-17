@@ -64,6 +64,11 @@ async function handleConnection(socket: AppSocket, db: Db, live: LiveEvents) {
         .disconnect(row.id, row.eventId)
         .catch((err: unknown) => live.logError(err, "Trennen fehlgeschlagen"));
     });
+    socket.on("activity", () => {
+      live
+        .activity(row.id, row.eventId)
+        .catch((err: unknown) => live.logError(err, "Rückmeldung fehlgeschlagen"));
+    });
     await socket.join(rooms.participant(row.id));
     await live.connect(row.id, row.eventId);
     return;

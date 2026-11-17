@@ -4,6 +4,7 @@ import {
   LOGO_MAX_BYTES,
   IMAGE_MIME_TYPES,
   LANGUAGES,
+  PARTICIPANT_TERM_MAX,
   MAX_ROUND_DURATION_S,
   MIN_ROUND_DURATION_S,
   questionsInput,
@@ -48,6 +49,8 @@ const generalOf = (e: EventDetail): EventGeneralInput => ({
   firstMatchDelayS: e.firstMatchDelayS,
   primaryColor: e.primaryColor,
   language: e.language,
+  participantTermSingular: e.participantTermSingular,
+  participantTermPlural: e.participantTermPlural,
 });
 
 /** Gemeinsame Logik für Formulare mit Speichern-Button. */
@@ -198,6 +201,38 @@ function GeneralTab({ event, onSaved }: TabProps) {
                   </option>
                 ))}
               </Select>
+            </Field>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field
+              label="Bezeichnung der Teilnehmenden (Mehrzahl)"
+              htmlFor="termPlural"
+              hint="Für den Zähler auf der Leinwand, z. B. „42 Gründer*innen sind dabei“. Leer: „Teilnehmende“."
+              error={issues.participantTermPlural}
+            >
+              <Input
+                id="termPlural"
+                maxLength={PARTICIPANT_TERM_MAX}
+                placeholder="z. B. Gründer*innen"
+                value={form.participantTermPlural ?? ""}
+                invalid={!!issues.participantTermPlural}
+                onChange={(e) => update({ participantTermPlural: e.target.value || null })}
+              />
+            </Field>
+            <Field
+              label="Bezeichnung (Einzahl)"
+              htmlFor="termSingular"
+              hint="Wenn genau eine Person dabei ist. Leer: „Person“."
+              error={issues.participantTermSingular}
+            >
+              <Input
+                id="termSingular"
+                maxLength={PARTICIPANT_TERM_MAX}
+                placeholder="z. B. Gründer*in"
+                value={form.participantTermSingular ?? ""}
+                invalid={!!issues.participantTermSingular}
+                onChange={(e) => update({ participantTermSingular: e.target.value || null })}
+              />
             </Field>
           </div>
           {form.language !== event.language && (
