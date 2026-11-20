@@ -17,6 +17,7 @@ describe("GET /api/health", () => {
       storage: t.storage,
       media: t.media,
       live: t.live,
+      mailer: t.mailer,
       publicBaseUrl: "http://x",
       retentionMs: RETENTION_MS,
       legal: TEST_LEGAL,

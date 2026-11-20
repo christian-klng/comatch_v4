@@ -35,7 +35,7 @@ function InviteForm({ onCreated }: { onCreated: (invite: InviteCreated) => void 
       <Field
         label="Mitglied einladen"
         htmlFor="invite-email"
-        hint="Du bekommst einen Einladungslink, den du selbst weitergibst. Er ist 7 Tage gültig."
+        hint="Die Person bekommt einen Einladungslink per Mail. Er ist 7 Tage gültig."
         error={error?.issues.email ?? (error && !error.issues.email ? error.message : undefined)}
       >
         <div className="flex gap-2">
@@ -106,10 +106,19 @@ export function TeamPage() {
               }}
             />
             {created && (
-              <Alert tone="info">
+              <Alert tone={created.mailed ? "info" : "warning"}>
                 <p className="mb-2">
-                  Einladung für <strong>{created.email}</strong> erstellt. Kopiere den Link jetzt, er wird nur
-                  einmal angezeigt:
+                  {created.mailed ? (
+                    <>
+                      Einladung an <strong>{created.email}</strong> verschickt. Den Link kannst du zusätzlich
+                      selbst weitergeben, er wird nur einmal angezeigt:
+                    </>
+                  ) : (
+                    <>
+                      Einladung für <strong>{created.email}</strong> erstellt, aber nicht per Mail verschickt.
+                      Gib den Link selbst weiter, er wird nur einmal angezeigt:
+                    </>
+                  )}
                 </p>
                 <div className="flex gap-2">
                   <Input

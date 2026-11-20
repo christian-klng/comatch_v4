@@ -13,6 +13,7 @@ import { createDb } from "../src/db/client.ts";
 import { account, adminUser, event } from "../src/db/schema.ts";
 import { createEvent } from "../src/events/service.ts";
 import { createMediaSigner } from "../src/lib/media.ts";
+import { createMemoryMailer } from "../src/mail/mailer.ts";
 import { createManualClock } from "../src/live/clock.ts";
 import { LiveEvents, type Emitter } from "../src/live/runtime.ts";
 import { hashPassword } from "../src/lib/password.ts";
@@ -44,6 +45,7 @@ export function useTestApp() {
   const media = createMediaSigner("test-secret-test-secret-test-secret");
   const clock = createManualClock();
   const live = new LiveEvents({ db, media, clock });
+  const mailer = createMemoryMailer();
   const emits = recordingEmitter();
   live.attach(emits);
   const routes: { method: string; url: string }[] = [];
@@ -52,6 +54,7 @@ export function useTestApp() {
     storage,
     media,
     live,
+    mailer,
     publicBaseUrl: PUBLIC_BASE_URL,
     cookieSecure: false,
     retentionMs: RETENTION_MS,
@@ -63,6 +66,8 @@ export function useTestApp() {
     await live.idle();
     live.reset();
     emits.clear();
+    mailer.sent.length = 0;
+    mailer.failNext = false;
     const tables = await db.execute<{ tablename: string }>(
       rawSql`select tablename from pg_tables where schemaname = 'public'`,
     );
@@ -84,6 +89,8 @@ export function useTestApp() {
     clock,
     live,
     emits,
+    /** Verschickte Mails; `failNext` lässt den nächsten Versand scheitern. */
+    mailer,
     app: () => appPromise,
 
     /** Spult die Testuhr vor; Timer laufen und deren DB-Arbeit wird jeweils abgewartet. */

@@ -6,6 +6,7 @@ import { EventEditPage } from "./EventEditPage.tsx";
 import { EventListPage } from "./EventListPage.tsx";
 import { InviteAcceptPage } from "./InviteAcceptPage.tsx";
 import { LoginPage } from "./LoginPage.tsx";
+import { ForgotPasswordPage, ResetPasswordPage } from "./PasswordResetPages.tsx";
 import { TeamPage } from "./TeamPage.tsx";
 
 // Eigener Code-Chunk: Handys von Teilnehmenden laden den Admin-Bereich nicht mit.
@@ -16,6 +17,8 @@ export default function AdminApp() {
     <AuthProvider>
       <Routes>
         <Route path="login" element={<LoginPage />} />
+        <Route path="forgot" element={<ForgotPasswordPage />} />
+        <Route path="reset/:token" element={<ResetPasswordPage />} />
         <Route
           element={
             <RequireAdmin>

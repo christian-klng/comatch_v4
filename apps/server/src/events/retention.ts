@@ -1,6 +1,6 @@
-import { and, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
-import { event, participant } from "../db/schema.ts";
+import { authToken, event, participant } from "../db/schema.ts";
 import type { LiveEvents } from "../live/runtime.ts";
 import type { Storage } from "../storage/storage.ts";
 
@@ -82,5 +82,7 @@ export async function runRetention(deps: RetentionDeps) {
   const now = deps.now?.() ?? new Date();
   const ended = await endAbandoned(deps.db, deps.live, now);
   const purged = await purgeExpired(deps.db, deps.storage, now, deps.retentionMs);
+  // Abgelaufene Einmal-Links (Passwort zurücksetzen) braucht niemand mehr.
+  await deps.db.delete(authToken).where(lt(authToken.expiresAt, now));
   return { ended, purged };
 }

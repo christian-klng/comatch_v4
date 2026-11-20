@@ -1,6 +1,7 @@
 import type { LegalInfo } from "@comatch/shared";
 import type { Db } from "./db/client.ts";
 import type { MediaSigner } from "./lib/media.ts";
+import type { Mailer } from "./mail/mailer.ts";
 import type { LiveEvents } from "./live/runtime.ts";
 import type { Storage } from "./storage/storage.ts";
 
@@ -10,6 +11,7 @@ export interface AppContext {
   storage: Storage;
   media: MediaSigner;
   live: LiveEvents;
+  mailer: Mailer;
   publicBaseUrl: string;
   cookieSecure: boolean;
   /** Löschfrist nach Eventende. */

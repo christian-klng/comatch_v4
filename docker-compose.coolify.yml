@@ -30,6 +30,9 @@ services:
       - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-}
       # Stunden nach Eventende, bis Selfies und Sitzungen gelöscht werden.
       - RETENTION_HOURS=${RETENTION_HOURS:-24}
+      # Mailversand für Einladungen und „Passwort vergessen“. Leer: keine Mails.
+      - SMTP_URL=${SMTP_URL:-}
+      - MAIL_FROM=${MAIL_FROM:-}
       # Impressum und Datenschutzerklärung.
       - LEGAL_NAME=${LEGAL_NAME:?}
       - LEGAL_ADDRESS=${LEGAL_ADDRESS:?}

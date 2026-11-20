@@ -5,6 +5,7 @@ import { runMigrations } from "./db/migrate.ts";
 import { RETENTION_CHECK_MS, runRetention } from "./events/retention.ts";
 import { createMediaSigner } from "./lib/media.ts";
 import { randomToken } from "./lib/tokens.ts";
+import { createLogMailer, createSmtpMailer, type Mailer } from "./mail/mailer.ts";
 import { systemClock } from "./live/clock.ts";
 import { LiveEvents } from "./live/runtime.ts";
 import { attachRealtime } from "./realtime/socket.ts";
@@ -39,6 +40,12 @@ const serializers = {
 const legal = legalInfo(config);
 const retentionMs = config.RETENTION_HOURS * 60 * 60 * 1000;
 
+// Wird nach dem Start auf das Log der App umgestellt.
+let logMail: (message: string) => void = console.log;
+const mailer: Mailer = config.SMTP_URL
+  ? createSmtpMailer(config.SMTP_URL, config.MAIL_FROM!)
+  : createLogMailer((message) => logMail(message), config.NODE_ENV === "development");
+
 const app = await buildApp({
   logger:
     config.NODE_ENV === "development"
@@ -55,6 +62,7 @@ const app = await buildApp({
   storage,
   media,
   live,
+  mailer,
   publicBaseUrl: config.PUBLIC_BASE_URL,
   cookieSecure: config.COOKIE_SECURE,
   webDistDir: config.WEB_DIST_DIR,
@@ -62,6 +70,7 @@ const app = await buildApp({
 
 const io = attachRealtime(app.server, { db, live });
 live.setLogger(app.log);
+logMail = (message) => app.log.info(message);
 app.log.info(s3 ? `Selfies liegen im S3-Bucket ${s3.bucket}` : "Selfies liegen in der Datenbank");
 
 // Beim Herunterfahren gebraucht, gesetzt erst nach dem Start (Signal kann vorher kommen).
@@ -85,6 +94,9 @@ await app.listen({ port: config.API_PORT, host: config.HOST });
 // Laufende Events nach einem Neustart fortsetzen (Timer aus round_ends_at).
 await live.restore();
 
+if (config.NODE_ENV === "production" && !mailer.enabled) {
+  app.log.warn("SMTP_URL fehlt: Einladungen und „Passwort vergessen“ verschicken keine Mails.");
+}
 if (config.NODE_ENV === "production" && !legal.configured) {
   app.log.warn(
     "LEGAL_NAME, LEGAL_ADDRESS und LEGAL_EMAIL fehlen: Impressum und Datenschutzerklärung sind unvollständig.",

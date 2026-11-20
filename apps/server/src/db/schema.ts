@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   ADMIN_ROLES,
+  AUTH_TOKEN_KINDS,
   EVENT_STATUSES,
   LANGUAGES,
   MATCH_GROUP_KINDS,
@@ -26,6 +27,7 @@ import {
 } from "@comatch/shared";
 
 export const adminRole = pgEnum("admin_role", ADMIN_ROLES);
+export const authTokenKind = pgEnum("auth_token_kind", AUTH_TOKEN_KINDS);
 export const eventStatus = pgEnum("event_status", EVENT_STATUSES);
 export const eventLanguage = pgEnum("event_language", LANGUAGES);
 export const participantStatus = pgEnum("participant_status", PARTICIPANT_STATUSES);
@@ -106,6 +108,23 @@ export const adminInvite = pgTable(
     acceptedAt: timestamp({ withTimezone: true }),
   },
   (t) => [index().on(t.accountId)],
+);
+
+/** Einmal-Links, die per Mail verschickt werden (Passwort zurücksetzen, E-Mail bestätigen). */
+export const authToken = pgTable(
+  "auth_token",
+  {
+    /** SHA-256 des Tokens; der Klartext steht nur im Link. */
+    tokenHash: text().primaryKey(),
+    adminId: uuid()
+      .notNull()
+      .references(() => adminUser.id, { onDelete: "cascade" }),
+    kind: authTokenKind().notNull(),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    usedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.adminId)],
 );
 
 // ---------------------------------------------------------------------------

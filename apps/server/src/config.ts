@@ -37,6 +37,14 @@ const envSchema = z.object({
   /** Nur hinter einem Reverse-Proxy (Caddy) einschalten: Dann gilt X-Forwarded-For als Client-IP. */
   TRUST_PROXY: z.stringbool().default(false),
 
+  /**
+   * Mailversand für Einladungen und „Passwort vergessen“, z. B.
+   * `smtps://nutzer:passwort@smtp.example.de:465`. Ohne SMTP_URL stehen die Mails nur im Log.
+   */
+  SMTP_URL: optionalText(z.string().regex(/^smtps?:\/\//, "Muss mit smtp:// oder smtps:// beginnen.")),
+  /** Absender, z. B. `CoMatch <noreply@example.de>`. Pflicht mit SMTP_URL. */
+  MAIL_FROM: optionalText(z.string()),
+
   /** Angaben für Impressum und Datenschutzerklärung (Pflicht im Produktivbetrieb). */
   LEGAL_NAME: optionalText(z.string()),
   LEGAL_ADDRESS: optionalText(z.string()),
@@ -78,6 +86,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     .refine((c) => !c.S3_ENDPOINT || (c.S3_BUCKET && c.S3_ACCESS_KEY_ID && c.S3_SECRET_ACCESS_KEY), {
       message: "Mit S3_ENDPOINT sind auch S3_BUCKET, S3_ACCESS_KEY_ID und S3_SECRET_ACCESS_KEY nötig.",
       path: ["S3_ENDPOINT"],
+    })
+    .refine((c) => !c.SMTP_URL || c.MAIL_FROM, {
+      message: "Mit SMTP_URL ist auch MAIL_FROM nötig.",
+      path: ["MAIL_FROM"],
     })
     .safeParse(env);
   if (!result.success) {

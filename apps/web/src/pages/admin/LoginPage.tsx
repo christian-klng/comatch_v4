@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { Alert, Button, Field, Input } from "../../components/ui.tsx";
 import { errorMessage } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
@@ -62,6 +62,9 @@ export function LoginPage() {
         <Button type="submit" busy={busy} className="mt-2">
           Anmelden
         </Button>
+        <Link to="/admin/forgot" className="text-center text-sm text-slate-500 hover:text-slate-900">
+          Passwort vergessen?
+        </Link>
       </form>
     </AuthShell>
   );

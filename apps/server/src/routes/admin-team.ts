@@ -7,6 +7,7 @@ import { normalizeEmail, requireOwner } from "../auth/session.ts";
 import type { AppContext } from "../context.ts";
 import { adminInvite, adminUser } from "../db/schema.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
+import { inviteMail } from "../mail/templates.ts";
 import { randomToken, sha256 } from "../lib/tokens.ts";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -15,7 +16,7 @@ const inviteBody = z.object({ email: z.email("Bitte eine gültige E-Mail eingebe
 const idParams = z.object({ id: z.uuid() });
 
 /** Admins und Einladungen des eigenen Kontos; ändern darf nur die*der Inhaber*in. */
-export const adminTeamRoutes: FastifyPluginAsync<AppContext> = async (app, { db, publicBaseUrl }) => {
+export const adminTeamRoutes: FastifyPluginAsync<AppContext> = async (app, { db, mailer, publicBaseUrl }) => {
   const inviter = alias(adminUser, "inviter");
 
   app.get("/team", async (request) => {
@@ -82,13 +83,31 @@ export const adminTeamRoutes: FastifyPluginAsync<AppContext> = async (app, { db,
         expiresAt: new Date(Date.now() + INVITE_TTL_MS),
       })
       .returning();
+    const acceptUrl = `${publicBaseUrl}/invite/${token}`;
+    // Der Link wird zusätzlich angezeigt; scheitert die Mail, gibt man ihn selbst weiter.
+    let mailed = false;
+    if (mailer.enabled) {
+      try {
+        await mailer.send(
+          inviteMail(email, {
+            accountName: request.admin!.accountName,
+            inviter: request.admin!.email,
+            url: acceptUrl,
+          }),
+        );
+        mailed = true;
+      } catch (err) {
+        request.log.error({ err }, "Einladung nicht per Mail verschickt");
+      }
+    }
     return reply.code(201).send({
       id: invite!.id,
       email: invite!.email,
       createdAt: invite!.createdAt.toISOString(),
       expiresAt: invite!.expiresAt.toISOString(),
       invitedByEmail: request.admin!.email,
-      acceptUrl: `${publicBaseUrl}/invite/${token}`,
+      acceptUrl,
+      mailed,
     } satisfies InviteCreated);
   });
 

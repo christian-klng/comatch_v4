@@ -65,7 +65,7 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env exec app
   node apps/server/src/db/create-admin.ts --email du@example.de
 ```
 
-Weitere Admins lädt man danach in der Moderation unter „Team“ ein. Passwort vergessen: denselben Befehl mit `--reset` ausführen (meldet alle Sitzungen des Kontos ab).
+Weitere Admins lädt man danach in der Moderation unter „Team“ ein. Passwort vergessen: über „Passwort vergessen?“ auf der Login-Seite, wenn der Mailversand eingerichtet ist (`SMTP_URL` und `MAIL_FROM` in der `.env`, siehe `env.example`). Ohne Mailversand denselben Befehl mit `--reset` ausführen (meldet alle Sitzungen des Kontos ab).
 
 ## 3. Betrieb
 

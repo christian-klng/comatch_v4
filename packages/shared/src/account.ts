@@ -25,3 +25,7 @@ export interface AccountDetail extends AccountInput {
 }
 
 export const ownerTransferInput = z.object({ adminId: z.uuid() });
+
+/** Einmal-Links per Mail: E-Mail bestätigen, Passwort zurücksetzen. */
+export const AUTH_TOKEN_KINDS = ["verify_email", "reset_password"] as const;
+export type AuthTokenKind = (typeof AUTH_TOKEN_KINDS)[number];

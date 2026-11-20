@@ -49,6 +49,9 @@ services:
       # Fest, damit Bild-Links einen Neustart überstehen.
       MEDIA_SIGNING_SECRET: ${MEDIA_SIGNING_SECRET:?MEDIA_SIGNING_SECRET fehlt}
       RETENTION_HOURS: ${RETENTION_HOURS:-24}
+      # Leer: Einladungen und „Passwort vergessen“ verschicken keine Mails.
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       LEGAL_NAME: ${LEGAL_NAME:-}
       LEGAL_ADDRESS: ${LEGAL_ADDRESS:-}
       LEGAL_EMAIL: ${LEGAL_EMAIL:-}

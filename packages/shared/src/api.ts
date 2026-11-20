@@ -38,6 +38,8 @@ export interface InviteListItem {
 export interface InviteCreated extends InviteListItem {
   /** Nur direkt nach dem Anlegen bekannt; danach liegt nur der Hash in der DB. */
   acceptUrl: string;
+  /** Die Einladung ging auch per Mail raus (false: kein Versand eingerichtet oder fehlgeschlagen). */
+  mailed: boolean;
 }
 
 export interface InvitePreview {

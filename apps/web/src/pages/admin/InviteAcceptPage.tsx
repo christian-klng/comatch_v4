@@ -53,8 +53,7 @@ export function InviteAcceptPage() {
       {invite && (
         <form onSubmit={submit} className="flex flex-col gap-4">
           <p className="text-sm text-slate-600">
-            Du wurdest als Admin zu CoMatch eingeladen. Leg ein Passwort für <strong>{invite.email}</strong>{" "}
-            fest.
+            Du wurdest zu CoMatch eingeladen. Leg ein Passwort für <strong>{invite.email}</strong> fest.
           </p>
           {error && <Alert>{error}</Alert>}
           <input type="email" autoComplete="username" value={invite.email} readOnly hidden />
