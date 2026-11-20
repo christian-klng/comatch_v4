@@ -17,4 +17,6 @@ export interface AppContext {
   /** Löschfrist nach Eventende. */
   retentionMs: number;
   legal: LegalInfo;
+  /** Dürfen sich neue Konten selbst registrieren (SIGNUP_MODE=open)? */
+  signupOpen: boolean;
 }

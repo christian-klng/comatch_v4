@@ -1,6 +1,6 @@
-import { and, eq, gt, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, eq, exists, gt, inArray, isNotNull, isNull, lt, lte, notExists, sql } from "drizzle-orm";
 import type { Db } from "../db/client.ts";
-import { authToken, event, participant } from "../db/schema.ts";
+import { account, adminUser, authToken, event, participant } from "../db/schema.ts";
 import type { LiveEvents } from "../live/runtime.ts";
 import type { Storage } from "../storage/storage.ts";
 
@@ -69,6 +69,34 @@ export async function endAbandoned(db: Db, live: LiveEvents, now: Date) {
   return ended;
 }
 
+/** So lange bleibt ein Konto bestehen, dessen E-Mail nie bestätigt wurde. */
+export const UNVERIFIED_ACCOUNT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Löscht Konten, die bei der Registrierung angelegt, aber nie bestätigt wurden. Ohne Bestätigung
+ * gibt es keinen Login, also auch keine Events und keine weiteren Mitglieder.
+ */
+export async function deleteUnverifiedAccounts(db: Db, now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - UNVERIFIED_ACCOUNT_TTL_MS);
+  const deleted = await db
+    .delete(account)
+    .where(
+      and(
+        lt(account.createdAt, cutoff),
+        notExists(db.select().from(event).where(eq(event.accountId, account.id))),
+        notExists(
+          db
+            .select()
+            .from(adminUser)
+            .where(and(eq(adminUser.accountId, account.id), isNotNull(adminUser.emailVerifiedAt))),
+        ),
+        exists(db.select().from(adminUser).where(eq(adminUser.accountId, account.id))),
+      ),
+    )
+    .returning({ id: account.id });
+  return deleted.length;
+}
+
 export interface RetentionDeps {
   db: Db;
   storage: Storage;
@@ -84,5 +112,6 @@ export async function runRetention(deps: RetentionDeps) {
   const purged = await purgeExpired(deps.db, deps.storage, now, deps.retentionMs);
   // Abgelaufene Einmal-Links (Passwort zurücksetzen) braucht niemand mehr.
   await deps.db.delete(authToken).where(lt(authToken.expiresAt, now));
+  await deleteUnverifiedAccounts(deps.db, now);
   return { ended, purged };
 }

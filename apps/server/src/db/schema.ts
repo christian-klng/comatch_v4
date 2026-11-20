@@ -66,6 +66,8 @@ export const adminUser = pgTable(
     email: text().notNull().unique(),
     passwordHash: text().notNull(),
     role: adminRole().notNull().default("member"),
+    /** Leer, solange die Person den Link aus der Bestätigungsmail nicht geöffnet hat (kein Login). */
+    emailVerifiedAt: timestamp({ withTimezone: true }),
     invitedBy: uuid().references((): AnyPgColumn => adminUser.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },

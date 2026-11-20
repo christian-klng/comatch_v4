@@ -1,12 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router";
-import type { AdminMe, InvitePreview } from "@comatch/shared";
+import { MIN_PASSWORD_LENGTH, type AdminMe, type InvitePreview } from "@comatch/shared";
 import { Alert, Button, Field, Input, Spinner } from "../../components/ui.tsx";
 import { api, ApiError, errorMessage } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
 import { AuthShell } from "./AuthShell.tsx";
-
-const MIN_LENGTH = 10;
 
 export function InviteAcceptPage() {
   const { token = "" } = useParams();
@@ -57,13 +55,13 @@ export function InviteAcceptPage() {
           </p>
           {error && <Alert>{error}</Alert>}
           <input type="email" autoComplete="username" value={invite.email} readOnly hidden />
-          <Field label="Passwort" htmlFor="password" hint={`Mindestens ${MIN_LENGTH} Zeichen.`}>
+          <Field label="Passwort" htmlFor="password" hint={`Mindestens ${MIN_PASSWORD_LENGTH} Zeichen.`}>
             <Input
               id="password"
               type="password"
               autoComplete="new-password"
               required
-              minLength={MIN_LENGTH}
+              minLength={MIN_PASSWORD_LENGTH}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />

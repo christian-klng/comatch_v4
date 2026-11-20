@@ -45,6 +45,9 @@ const envSchema = z.object({
   /** Absender, z. B. `CoMatch <noreply@example.de>`. Pflicht mit SMTP_URL. */
   MAIL_FROM: optionalText(z.string()),
 
+  /** `open`: Jede Person kann ein eigenes Konto anlegen. `closed`: nur per Einladung. */
+  SIGNUP_MODE: z.enum(["open", "closed"]).default("closed"),
+
   /** Angaben für Impressum und Datenschutzerklärung (Pflicht im Produktivbetrieb). */
   LEGAL_NAME: optionalText(z.string()),
   LEGAL_ADDRESS: optionalText(z.string()),

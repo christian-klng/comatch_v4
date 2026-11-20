@@ -9,6 +9,7 @@ import { requireAdmin } from "./auth/session.ts";
 import type { AppContext } from "./context.ts";
 import { errorHandler, HttpError } from "./lib/errors.ts";
 import { securityHeaders } from "./lib/security-headers.ts";
+import { signupRoutes } from "./routes/signup.ts";
 import { adminAccountRoutes } from "./routes/admin-account.ts";
 import { adminEventRoutes } from "./routes/admin-events.ts";
 import { adminTeamRoutes } from "./routes/admin-team.ts";
@@ -73,6 +74,7 @@ export async function buildApp(options: AppOptions) {
       });
       await api.register(authRoutes, context);
       await api.register(passwordResetRoutes, context);
+      await api.register(signupRoutes, context);
       await api.register(inviteRoutes, context);
       await api.register(publicEventRoutes, context);
       await api.register(mediaRoutes, context);

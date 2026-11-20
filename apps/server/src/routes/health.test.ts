@@ -21,6 +21,7 @@ describe("GET /api/health", () => {
       publicBaseUrl: "http://x",
       retentionMs: RETENTION_MS,
       legal: TEST_LEGAL,
+      signupOpen: false,
       cookieSecure: false,
       pingDb: async () => {
         throw new Error("down");

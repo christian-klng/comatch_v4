@@ -1,14 +1,13 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import type { AdminMe } from "@comatch/shared";
+import { MIN_PASSWORD_LENGTH, type AdminMe } from "@comatch/shared";
 import { createSession, loadAdminMe, normalizeEmail, setSessionCookie } from "../auth/session.ts";
 import type { AppContext } from "../context.ts";
 import { adminSession, adminUser, authToken } from "../db/schema.ts";
 import { HttpError } from "../lib/errors.ts";
 import { hashPassword } from "../lib/password.ts";
 import { randomToken, sha256 } from "../lib/tokens.ts";
-import { MIN_PASSWORD_LENGTH } from "./invites.ts";
 import { passwordResetMail } from "../mail/templates.ts";
 
 export const RESET_TTL_MS = 60 * 60 * 1000;
@@ -77,7 +76,11 @@ export const passwordResetRoutes: FastifyPluginAsync<AppContext> = async (
       const now = new Date();
 
       await db.transaction(async (tx) => {
-        await tx.update(adminUser).set({ passwordHash }).where(eq(adminUser.id, row.adminId));
+        // Der Link kam per Mail an: Damit ist auch die E-Mail bestätigt, falls sie es noch nicht war.
+        await tx
+          .update(adminUser)
+          .set({ passwordHash, emailVerifiedAt: sql`coalesce(${adminUser.emailVerifiedAt}, now())` })
+          .where(eq(adminUser.id, row.adminId));
         // Alle offenen Links der Person verfallen, und wer angemeldet war, fliegt raus.
         await tx
           .update(authToken)

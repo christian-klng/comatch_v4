@@ -67,6 +67,7 @@ try {
         email,
         passwordHash: await hashPassword(password),
         role: hasOwner ? "member" : "owner",
+        emailVerifiedAt: new Date(),
       });
     }
   }

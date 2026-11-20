@@ -58,6 +58,7 @@ const app = await buildApp({
   trustProxy: config.TRUST_PROXY,
   retentionMs,
   legal,
+  signupOpen: config.SIGNUP_MODE === "open",
   db,
   storage,
   media,
@@ -94,6 +95,9 @@ await app.listen({ port: config.API_PORT, host: config.HOST });
 // Laufende Events nach einem Neustart fortsetzen (Timer aus round_ends_at).
 await live.restore();
 
+if (config.SIGNUP_MODE === "open" && !mailer.enabled) {
+  app.log.warn("SIGNUP_MODE=open ohne SMTP_URL: Neue Konten bekommen keine Bestätigungsmail.");
+}
 if (config.NODE_ENV === "production" && !mailer.enabled) {
   app.log.warn("SMTP_URL fehlt: Einladungen und „Passwort vergessen“ verschicken keine Mails.");
 }

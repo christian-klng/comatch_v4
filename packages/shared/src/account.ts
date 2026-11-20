@@ -29,3 +29,19 @@ export const ownerTransferInput = z.object({ adminId: z.uuid() });
 /** Einmal-Links per Mail: E-Mail bestätigen, Passwort zurücksetzen. */
 export const AUTH_TOKEN_KINDS = ["verify_email", "reset_password"] as const;
 export type AuthTokenKind = (typeof AUTH_TOKEN_KINDS)[number];
+
+export const MIN_PASSWORD_LENGTH = 10;
+
+export const signupInput = z.object({
+  email: z.string().trim().max(320).pipe(z.email("Bitte eine gültige E-Mail eingeben.")),
+  password: z.string().min(MIN_PASSWORD_LENGTH, `Mindestens ${MIN_PASSWORD_LENGTH} Zeichen.`).max(200),
+  /** Name des neuen Kontos, z. B. die Organisation. */
+  accountName: z.string().trim().min(1, "Bitte einen Namen eingeben.").max(100),
+});
+export type SignupInput = z.infer<typeof signupInput>;
+
+/** Was die Oberfläche vor dem Login wissen muss. */
+export interface PublicConfig {
+  /** Dürfen sich neue Konten selbst registrieren? */
+  signupOpen: boolean;
+}

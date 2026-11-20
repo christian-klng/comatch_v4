@@ -1,15 +1,13 @@
 import { and, eq, gt, isNull } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import type { AdminMe, InvitePreview } from "@comatch/shared";
+import { MIN_PASSWORD_LENGTH, type AdminMe, type InvitePreview } from "@comatch/shared";
 import { createSession, loadAdminMe, setSessionCookie } from "../auth/session.ts";
 import type { AppContext } from "../context.ts";
 import { adminInvite, adminUser } from "../db/schema.ts";
 import { HttpError } from "../lib/errors.ts";
 import { hashPassword } from "../lib/password.ts";
 import { sha256 } from "../lib/tokens.ts";
-
-export const MIN_PASSWORD_LENGTH = 10;
 
 const acceptBody = z.object({
   password: z.string().min(MIN_PASSWORD_LENGTH, `Mindestens ${MIN_PASSWORD_LENGTH} Zeichen.`).max(200),
@@ -52,6 +50,8 @@ export const inviteRoutes: FastifyPluginAsync<AppContext> = async (app, { db, co
             email: invite.email,
             passwordHash,
             invitedBy: invite.invitedBy,
+            // Wer den Link aus der Einladung öffnet, hat Zugriff auf das Postfach.
+            emailVerifiedAt: new Date(),
           })
           .returning({ id: adminUser.id });
         await tx.update(adminInvite).set({ acceptedAt: new Date() }).where(eq(adminInvite.id, invite.id));

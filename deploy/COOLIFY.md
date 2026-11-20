@@ -51,8 +51,11 @@ Diese Werte trägst du ein. Ohne die Pflichtfelder startet Coolify das Deploymen
 | `RETENTION_HOURS` | nein    | `24` (Standard)                                       |
 | `SMTP_URL`        | nein    | `smtps://nutzer:passwort@smtp.example.de:465`         |
 | `MAIL_FROM`       | nein    | `CoMatch <noreply@example.de>` (Pflicht mit SMTP_URL) |
+| `SIGNUP_MODE`     | nein    | `closed` (Standard) oder `open`                       |
 
 Mit `SMTP_URL` und `MAIL_FROM` verschickt die App Einladungen und Links für „Passwort vergessen“ per Mail. Ohne sie gehen keine Mails raus: Einladungslinks gibt man dann von Hand weiter, und ein vergessenes Passwort lässt sich nur über `admin:create --reset` neu setzen. Für die Absenderdomain SPF und DKIM beim Mailanbieter einrichten, sonst landen die Mails im Spam. Der Mailanbieter kommt zum AV-Vertrag dazu.
+
+Mit `SIGNUP_MODE=open` kann sich jede Person auf der Startseite selbst ein Konto anlegen; es wird erst nach Bestätigung per Mail nutzbar und braucht deshalb den Mailversand. Standard ist `closed`: neue Konten nur per Einladung oder `admin:create`.
 
 Die Variablen `S3_*` leer lassen, dann liegen die Selfies in der Datenbank. Nur wer die Fotos lieber in einem S3-Speicher hält (z. B. Hetzner Object Storage, Bucket privat), füllt `S3_ENDPOINT` (z. B. `https://fsn1.your-objectstorage.com`), `S3_BUCKET`, `S3_ACCESS_KEY_ID` und `S3_SECRET_ACCESS_KEY`, optional `S3_REGION` (Standard `fsn1`). Die Einträge unter **S3 Storage** in Coolify gelten nur für Coolifys eigene Backups, die App liest sie nicht. Mit S3 kommt dessen Anbieter zum AV-Vertrag dazu.
 

@@ -33,6 +33,8 @@ services:
       # Mailversand für Einladungen und „Passwort vergessen“. Leer: keine Mails.
       - SMTP_URL=${SMTP_URL:-}
       - MAIL_FROM=${MAIL_FROM:-}
+      # open: Jede Person kann ein eigenes Konto anlegen (braucht SMTP_URL).
+      - SIGNUP_MODE=${SIGNUP_MODE:-closed}
       # Impressum und Datenschutzerklärung.
       - LEGAL_NAME=${LEGAL_NAME:?}
       - LEGAL_ADDRESS=${LEGAL_ADDRESS:?}

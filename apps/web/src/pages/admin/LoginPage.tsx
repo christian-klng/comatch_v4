@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { Alert, Button, Field, Input } from "../../components/ui.tsx";
 import { errorMessage } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
+import { usePublicConfig } from "../../lib/publicConfig.ts";
 import { AuthShell } from "./AuthShell.tsx";
 
 /** Nur Pfade innerhalb der App zulassen (kein Open Redirect). */
@@ -12,6 +13,7 @@ function safeNext(next: string | null): string {
 
 export function LoginPage() {
   const { admin, login } = useAuth();
+  const config = usePublicConfig();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [email, setEmail] = useState("");
@@ -65,6 +67,11 @@ export function LoginPage() {
         <Link to="/admin/forgot" className="text-center text-sm text-slate-500 hover:text-slate-900">
           Passwort vergessen?
         </Link>
+        {config?.signupOpen && (
+          <Link to="/admin/signup" className="text-center text-sm text-slate-500 hover:text-slate-900">
+            Neu hier? Konto anlegen
+          </Link>
+        )}
       </form>
     </AuthShell>
   );

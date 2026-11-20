@@ -19,7 +19,7 @@ npm run db:seed    # Migrationen + Admin-Konto + Demo-Event „demo“
 npm run dev        # Server :3000 + Web :5173
 ```
 
-Dann <http://localhost:5173/admin> öffnen und mit dem Test-Admin aus `.env.example` anmelden. Unter <http://localhost:5173> zeigt eine Statusseite, ob API, Datenbank und Socket.IO laufen.
+Dann <http://localhost:5173/admin> öffnen und mit dem Test-Admin aus `.env.example` anmelden. Unter <http://localhost:5173/status> zeigt eine Statusseite, ob API, Datenbank und Socket.IO laufen. Mit `SIGNUP_MODE=open` in der `.env` lässt sich unter <http://localhost:5173/admin/signup> ein eigenes Konto anlegen; die Bestätigungsmail steht ohne `SMTP_URL` im Server-Log.
 
 Ein Event ist für Teilnehmende erst erreichbar, wenn es im Admin-Bereich auf „Beitritt öffnen“ steht. Die Teilnahmeseite liegt unter `/e/<code>`.
 

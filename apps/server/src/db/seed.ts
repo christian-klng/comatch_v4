@@ -22,6 +22,7 @@ async function seedAdmin(db: Db, email: string, password: string) {
       email,
       passwordHash: await hashPassword(password),
       role: "owner",
+      emailVerifiedAt: new Date(),
     })
     .returning();
   return created!;

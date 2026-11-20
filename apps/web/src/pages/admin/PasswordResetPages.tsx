@@ -1,12 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import type { AdminMe } from "@comatch/shared";
+import { MIN_PASSWORD_LENGTH, type AdminMe } from "@comatch/shared";
 import { Alert, Button, Field, Input, Spinner } from "../../components/ui.tsx";
 import { api, ApiError, errorMessage } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
 import { AuthShell } from "./AuthShell.tsx";
-
-const MIN_LENGTH = 10;
 
 const backToLogin = (
   <Link to="/admin/login" className="text-center text-sm text-slate-500 hover:text-slate-900">
@@ -125,14 +123,18 @@ export function ResetPasswordPage() {
       {valid && (
         <form onSubmit={submit} className="flex flex-col gap-4">
           {error && <Alert>{error}</Alert>}
-          <Field label="Neues Passwort" htmlFor="password" hint={`Mindestens ${MIN_LENGTH} Zeichen.`}>
+          <Field
+            label="Neues Passwort"
+            htmlFor="password"
+            hint={`Mindestens ${MIN_PASSWORD_LENGTH} Zeichen.`}
+          >
             <Input
               id="password"
               type="password"
               autoComplete="new-password"
               autoFocus
               required
-              minLength={MIN_LENGTH}
+              minLength={MIN_PASSWORD_LENGTH}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />

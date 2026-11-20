@@ -25,3 +25,15 @@ export function passwordResetMail(to: string, values: { url: string }): Mail {
       footer,
   };
 }
+
+export function verifyEmailMail(to: string, values: { url: string }): Mail {
+  return {
+    to,
+    subject: "CoMatch: Bitte bestätige deine E-Mail",
+    text:
+      "Hallo,\n\nwillkommen bei CoMatch! Bestätige kurz deine E-Mail, dann kannst du dein erstes Event anlegen.\n\n" +
+      `Link zum Bestätigen (24 Stunden gültig):\n${values.url}\n\n` +
+      "Wenn du kein Konto angelegt hast, ignoriere diese Mail. Das Konto wird dann nach einer Woche gelöscht." +
+      footer,
+  };
+}

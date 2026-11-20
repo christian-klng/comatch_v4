@@ -1,15 +1,20 @@
 import { eq } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
-import { joinInput, type JoinResult } from "@comatch/shared";
+import { joinInput, type JoinResult, type PublicConfig } from "@comatch/shared";
 import type { AppContext } from "../context.ts";
 import { event } from "../db/schema.ts";
 import { notFound } from "../lib/errors.ts";
 import { getParticipantMe, getPublicEvent, joinEvent } from "../participants/service.ts";
 
 /** Öffentliche Event-Endpunkte (ohne Login). */
-export const publicEventRoutes: FastifyPluginAsync<AppContext> = async (app, { db, media, legal }) => {
+export const publicEventRoutes: FastifyPluginAsync<AppContext> = async (
+  app,
+  { db, media, legal, signupOpen },
+) => {
   /** Angaben für Impressum und Datenschutzerklärung. */
   app.get("/legal", async () => legal);
+
+  app.get("/config", async () => ({ signupOpen }) satisfies PublicConfig);
 
   app.get<{ Params: { slug: string } }>("/events/:slug", async (request) =>
     getPublicEvent(db, request.params.slug),
