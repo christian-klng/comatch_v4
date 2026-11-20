@@ -1,6 +1,5 @@
 import { asc, eq } from "drizzle-orm";
 import {
-  MAX_PARTICIPANTS_PER_EVENT,
   isJoinable,
   type EventStatus,
   type JoinInput,
@@ -8,7 +7,7 @@ import {
   type PublicEvent,
 } from "@comatch/shared";
 import type { Db } from "../db/client.ts";
-import { answerOption, event, participant, participantAnswer, question } from "../db/schema.ts";
+import { account, answerOption, event, participant, participantAnswer, question } from "../db/schema.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
 import type { MediaSigner } from "../lib/media.ts";
 import { randomToken, sha256 } from "../lib/tokens.ts";
@@ -53,12 +52,17 @@ async function loadPublicQuestions(db: Db | Tx, eventId: string): Promise<Public
 export async function getPublicEvent(db: Db, slug: string): Promise<PublicEvent> {
   const row = await db.query.event.findFirst({ where: eq(event.slug, slug) });
   if (!row) throw notFound("event_not_found");
+  const owner = await db.query.account.findFirst({
+    where: eq(account.id, row.accountId),
+    columns: { status: true },
+  });
   return {
     slug: row.slug,
     title: row.title,
     language: row.language,
     status: row.status,
-    joinable: isJoinable(row.status),
+    // Events gesperrter Konten nehmen niemanden mehr auf.
+    joinable: isJoinable(row.status) && owner?.status === "active",
     roundDurationS: row.roundDurationS,
     logoUrl: row.logoUpdatedAt ? `/api/events/${row.slug}/logo?v=${row.logoUpdatedAt.getTime()}` : null,
     primaryColor: row.primaryColor,
@@ -79,7 +83,14 @@ export async function joinEvent(
     if (!isJoinable(row.status)) {
       throw new HttpError(409, "event_not_joinable", NOT_JOINABLE[row.status] ?? "Beitritt nicht möglich.");
     }
-    if ((await tx.$count(participant, eq(participant.eventId, row.id))) >= MAX_PARTICIPANTS_PER_EVENT) {
+    const owner = await tx.query.account.findFirst({
+      where: eq(account.id, row.accountId),
+      columns: { status: true, maxParticipants: true },
+    });
+    if (owner?.status !== "active") {
+      throw new HttpError(409, "event_not_joinable", "Beitritt nicht möglich.");
+    }
+    if ((await tx.$count(participant, eq(participant.eventId, row.id))) >= owner.maxParticipants) {
       throw new HttpError(409, "event_full", "Das Event ist voll.");
     }
 

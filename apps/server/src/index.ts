@@ -59,6 +59,7 @@ const app = await buildApp({
   retentionMs,
   legal,
   signupOpen: config.SIGNUP_MODE === "open",
+  maxLiveEvents: config.MAX_LIVE_EVENTS,
   db,
   storage,
   media,

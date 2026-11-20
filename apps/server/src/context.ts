@@ -19,4 +19,6 @@ export interface AppContext {
   legal: LegalInfo;
   /** Dürfen sich neue Konten selbst registrieren (SIGNUP_MODE=open)? */
   signupOpen: boolean;
+  /** Wie viele Events auf dieser Instanz gleichzeitig laufen dürfen, über alle Konten. */
+  maxLiveEvents: number;
 }

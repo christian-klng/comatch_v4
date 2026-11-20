@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { EventStatus, Language, ParticipantStatus } from "./domain.ts";
 import { QUESTION_COUNT } from "./event-config.ts";
 
-/** Schutz gegen Missbrauch; geplant sind bis zu 100 Teilnehmende pro Event. */
+/** Technische Obergrenze je Event; jedes Konto hat darunter seine eigene Grenze (max_participants). */
 export const MAX_PARTICIPANTS_PER_EVENT = 250;
 
 /** Das Handy verkleinert Selfies vor dem Upload, typisch sind 100–200 KB. */

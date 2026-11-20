@@ -12,6 +12,7 @@
     "db:migrate": "node --env-file-if-exists=../../.env src/db/migrate-cli.ts",
     "db:seed": "node --env-file-if-exists=../../.env src/db/seed.ts",
     "admin:create": "node --env-file-if-exists=../../.env src/db/create-admin.ts",
+    "accounts": "node --env-file-if-exists=../../.env src/db/accounts.ts",
     "db:studio": "node --env-file-if-exists=../../.env ../../node_modules/drizzle-kit/bin.cjs studio",
     "simulate": "node src/matching/simulate.ts",
     "bots": "node scripts/bots.ts",

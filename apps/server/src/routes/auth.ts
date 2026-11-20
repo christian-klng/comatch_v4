@@ -13,7 +13,7 @@ import {
   setSessionCookie,
 } from "../auth/session.ts";
 import type { AppContext } from "../context.ts";
-import { adminUser } from "../db/schema.ts";
+import { account, adminUser } from "../db/schema.ts";
 import { sendVerificationMail } from "./signup.ts";
 import { HttpError } from "../lib/errors.ts";
 import { hashPassword, verifyPassword } from "../lib/password.ts";
@@ -37,6 +37,17 @@ export const authRoutes: FastifyPluginAsync<AppContext> = async (app, context) =
       if (!admin || !valid)
         throw new HttpError(401, "invalid_credentials", "E-Mail oder Passwort ist falsch.");
 
+      const owner = await db.query.account.findFirst({
+        where: eq(account.id, admin.accountId),
+        columns: { status: true },
+      });
+      if (owner?.status !== "active") {
+        throw new HttpError(
+          403,
+          "account_suspended",
+          "Dieses Konto ist gesperrt. Bitte wende dich an den Betreiber (siehe Impressum).",
+        );
+      }
       if (!admin.emailVerifiedAt) {
         // Das Passwort stimmt: Die Person bekommt den Link noch einmal.
         await sendVerificationMail(context, admin, (err) =>

@@ -22,6 +22,7 @@ describe("GET /api/health", () => {
       retentionMs: RETENTION_MS,
       legal: TEST_LEGAL,
       signupOpen: false,
+      maxLiveEvents: 20,
       cookieSecure: false,
       pingDb: async () => {
         throw new Error("down");

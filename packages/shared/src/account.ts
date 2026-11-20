@@ -45,3 +45,10 @@ export interface PublicConfig {
   /** Dürfen sich neue Konten selbst registrieren? */
   signupOpen: boolean;
 }
+
+export const ACCOUNT_STATUSES = ["active", "suspended"] as const;
+export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+
+/** Grenzen für neue Konten; je Konto überschreibbar (npm run accounts). */
+export const DEFAULT_MAX_LIVE_EVENTS = 2;
+export const DEFAULT_MAX_PARTICIPANTS = 150;

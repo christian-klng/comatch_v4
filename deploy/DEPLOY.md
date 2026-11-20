@@ -122,3 +122,18 @@ dc start app
   ```
   Legt ein Event „Lasttest …“ an; danach in der Moderation löschen.
 - [ ] Nach dem Probe-Event: Event beenden, in der Moderation „Fotos jetzt löschen“, Statistik und CSV-Export ansehen.
+
+## Konten verwalten
+
+Jedes Konto (Mandant) hat Grenzen: wie viele Events gleichzeitig laufen dürfen (neu: 2) und wie viele Personen einem Event beitreten können (neu: 150). Konten, die es vor der Einführung schon gab, stehen auf 10 und 250. Über alle Konten hinweg laufen höchstens `MAX_LIVE_EVENTS` Events gleichzeitig (Standard 20).
+
+Im Container der App:
+
+```bash
+node apps/server/src/db/accounts.ts list
+node apps/server/src/db/accounts.ts limits <konto> --live 5 --participants 200
+node apps/server/src/db/accounts.ts suspend <konto>
+node apps/server/src/db/accounts.ts unsuspend <konto>
+```
+
+`<konto>` ist die ID aus der Liste oder die E-Mail einer Person im Konto. Ein gesperrtes Konto kann sich nicht anmelden, und seinen Events kann niemand mehr beitreten. Events, die gerade laufen, laufen weiter, bis sie jemand beendet oder sie nach einer Woche ohne Aktivität automatisch enden.

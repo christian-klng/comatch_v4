@@ -36,7 +36,14 @@ export async function findAdminBySession(db: Db, token: string): Promise<AdminMe
     .from(adminSession)
     .innerJoin(adminUser, eq(adminUser.id, adminSession.adminId))
     .innerJoin(account, eq(account.id, adminUser.accountId))
-    .where(and(eq(adminSession.tokenHash, sha256(token)), gt(adminSession.expiresAt, new Date())))
+    .where(
+      and(
+        eq(adminSession.tokenHash, sha256(token)),
+        gt(adminSession.expiresAt, new Date()),
+        // Gesperrte Konten sind sofort draußen, auch mit laufender Sitzung.
+        eq(account.status, "active"),
+      ),
+    )
     .limit(1);
   return row ?? null;
 }

@@ -1,9 +1,12 @@
 // Lasttest: legt ein Event an, lässt N Bots beitreten und spielt einige Runden durch.
 //   npm run loadtest -w @comatch/server -- [--url http://localhost:3000] [--count 200] [--rounds 3]
+//     [--events 10]                               so viele Events gleichzeitig, je --count Bots
 //     [--confirm 5-40] [--not-found 0.05] [--concurrency 25]
 //     [--flaky] [--delay 200-800] [--drop 0.01]   schwaches WLAN: Verzögerung und Abbrüche
 //     [--restart]                                 wartet nach Runde 1 auf einen Server-Neustart
 // Braucht SEED_ADMIN_EMAIL und SEED_ADMIN_PASSWORD (wie npm run db:seed) für das Admin-Konto.
+// Mehrere Events brauchen ein Konto, das so viele gleichzeitig starten darf:
+//   npm run accounts -w @comatch/server -- limits <SEED_ADMIN_EMAIL> --live 10
 // Misst: Dauer von Beitritt und Upload, Zeit bis alle Handys ihr Match haben, Antwortzeiten der
 // Endpunkte, Fehler je Status, Datenmenge per Socket und die Event-Loop-Verzögerung des Servers.
 import { parseArgs } from "node:util";
@@ -15,6 +18,7 @@ const { values } = parseArgs({
   options: {
     url: { type: "string", default: "http://localhost:3000" },
     count: { type: "string", default: "200" },
+    events: { type: "string", default: "1" },
     rounds: { type: "string", default: "3" },
     confirm: { type: "string", default: "5-40" },
     "not-found": { type: "string", default: "0.05" },
@@ -27,6 +31,8 @@ const { values } = parseArgs({
 });
 const base = values.url;
 const count = Number(values.count);
+const eventCount = Number(values.events);
+const total = count * eventCount;
 const rounds = Number(values.rounds);
 const confirmDelayS = values.confirm.split("-").map(Number) as [number, number];
 const email = process.env.SEED_ADMIN_EMAIL;
@@ -115,13 +121,22 @@ async function admin<T>(method: string, path: string, body?: unknown): Promise<T
   return (await res.json()) as T;
 }
 
-const created = await admin<EventDetail>("POST", "/events", {
-  title: `Lasttest ${new Date().toLocaleTimeString("de-DE")}`,
-  startsAt: null,
-});
-await admin("PUT", `/events/${created.id}/status`, { status: "open" });
-const ev = (await (await fetch(`${base}/api/events/${created.slug}`)).json()) as PublicEvent;
-console.log(`Event ${created.slug} angelegt, ${count} Bots treten bei …`);
+const stamp = new Date().toLocaleTimeString("de-DE");
+const events: { created: EventDetail; ev: PublicEvent }[] = [];
+for (let n = 1; n <= eventCount; n++) {
+  const created = await admin<EventDetail>("POST", "/events", {
+    title: eventCount > 1 ? `Lasttest ${stamp} (${n}/${eventCount})` : `Lasttest ${stamp}`,
+    startsAt: null,
+  });
+  await admin("PUT", `/events/${created.id}/status`, { status: "open" });
+  const ev = (await (await fetch(`${base}/api/events/${created.slug}`)).json()) as PublicEvent;
+  events.push({ created, ev });
+}
+console.log(
+  eventCount > 1
+    ? `${eventCount} Events angelegt, je ${count} Bots treten bei (${total} gesamt) …`
+    : `Event ${events[0]!.created.slug} angelegt, ${count} Bots treten bei …`,
+);
 
 // ---------------------------------------------------------------------------
 // Ablauf
@@ -139,24 +154,37 @@ const proxy = values.flaky
 if (proxy)
   console.log(`Schwaches WLAN über Proxy :${proxy.port} (${values.delay} ms, Abbruch ${values.drop}/s)`);
 
-const world: BotWorld = {
+// Jedes Event hat seine eigene Welt (Codes der anderen kennt man nur im eigenen Raum).
+const worlds = events.map((): BotWorld => ({
   base: proxy ? `http://127.0.0.1:${proxy.port}` : base,
   codes: new Map(),
   confirmDelayS,
   notFoundRate: Number(values["not-found"]),
   onEvent,
-};
+}));
+
+// Der Beitritt ist je IP begrenzt (600 je Minute). Alle Bots kommen von derselben Adresse,
+// deshalb treten sehr viele Bots gestaffelt bei, statt in die Grenze zu laufen.
+const JOINS_PER_SECOND = 9;
+const paced = total > 500;
+if (paced) console.log(`Beitritt gestaffelt (${JOINS_PER_SECOND} je Sekunde, Grenze je IP).`);
 
 const bots: Bot[] = [];
 const joinStarted = performance.now();
 let next = 0;
 await Promise.all(
   Array.from({ length: Number(values.concurrency) }, async () => {
-    while (next < count) {
+    while (next < total) {
       const i = next++;
+      if (paced) {
+        const due = joinStarted + (i * 1000) / JOINS_PER_SECOND;
+        if (due > performance.now()) await new Promise((r) => setTimeout(r, due - performance.now()));
+      }
+      // Reihum auf die Events verteilt, damit sich alle gleichzeitig füllen.
+      const slot = i % eventCount;
       const started = performance.now();
       try {
-        bots.push(await startBot(world, ev, i));
+        bots.push(await startBot(worlds[slot]!, events[slot]!.ev, i));
         timings.set("join+selfie", [...(timings.get("join+selfie") ?? []), performance.now() - started]);
       } catch (err) {
         add(errors, `Beitritt: ${err instanceof Error ? err.message.slice(0, 80) : String(err)}`);
@@ -165,7 +193,7 @@ await Promise.all(
   }),
 );
 const joinMs = performance.now() - joinStarted;
-console.log(`${bots.length}/${count} beigetreten in ${ms(joinMs)}`);
+console.log(`${bots.length}/${total} beigetreten in ${ms(joinMs)}`);
 await new Promise((r) => setTimeout(r, 2_000));
 proxy?.setDropping(true);
 
@@ -180,7 +208,11 @@ const roundLatency: { round: number; matched: number; p50: number; p95: number; 
 const waitS = confirmDelayS[1] + 15;
 for (let round = 1; round <= rounds; round++) {
   const t0 = performance.now();
-  await admin("POST", `/events/${created.id}/control`, { action: round === 1 ? "start" : "next_round" });
+  await Promise.all(
+    events.map(({ created }) =>
+      admin("POST", `/events/${created.id}/control`, { action: round === 1 ? "start" : "next_round" }),
+    ),
+  );
   console.log(`Runde ${round} gestartet, warte ${waitS} s …`);
   await new Promise((r) => setTimeout(r, waitS * 1000));
   const seen = [...(firstMatchAt.get(round)?.values() ?? [])].map((t) => t - t0);
@@ -203,13 +235,17 @@ for (let round = 1; round <= rounds; round++) {
       "wieder verbunden": `${back.length}/${bots.length}`,
       "Wiederverbindung p50 (ab Rückkehr)": ms(after.p50),
       "Wiederverbindung max": ms(after.max),
-      "Runde danach": (await admin<EventDetail>("GET", `/events/${created.id}`)).status,
+      "Runde danach": (await admin<EventDetail>("GET", `/events/${events[0]!.created.id}`)).status,
     };
   }
 }
 
-const stats = await admin<EventStats>("GET", `/events/${created.id}/stats`);
-await admin("POST", `/events/${created.id}/control`, { action: "end" });
+const allStats = await Promise.all(
+  events.map(({ created }) => admin<EventStats>("GET", `/events/${created.id}/stats`)),
+);
+await Promise.all(
+  events.map(({ created }) => admin("POST", `/events/${created.id}/control`, { action: "end" })),
+);
 bots.forEach((b) => b.stop());
 clearInterval(loopTimer);
 await proxy?.close();
@@ -269,12 +305,15 @@ if (restartReport) {
   console.log("== Neustart ==");
   console.table(restartReport);
 }
-console.log("== Fairness ==");
-console.table({
-  Teilnehmende: stats.participants,
-  "bestätigte Matches": stats.matches.confirmed,
-  Bestätigungsquote: `${Math.round((stats.matches.confirmationRate ?? 0) * 100)} %`,
-  "Ø Matches pro Person": stats.perPerson.average.toFixed(2),
-  "ohne bestätigtes Match": stats.perPerson.withoutMatch,
-});
+console.log(eventCount > 1 ? "== Fairness (je Event) ==" : "== Fairness ==");
+console.table(
+  allStats.map((stats, index) => ({
+    ...(eventCount > 1 ? { Event: events[index]!.created.slug } : {}),
+    Teilnehmende: stats.participants,
+    "bestätigte Matches": stats.matches.confirmed,
+    Bestätigungsquote: `${Math.round((stats.matches.confirmationRate ?? 0) * 100)} %`,
+    "Ø Matches pro Person": stats.perPerson.average.toFixed(2),
+    "ohne bestätigtes Match": stats.perPerson.withoutMatch,
+  })),
+);
 process.exit(0);

@@ -39,7 +39,7 @@ export const TEST_LEGAL: LegalInfo = {
 /** Zähler für die Absender-Adressen der Test-Logins (siehe loginAs). */
 let loginCount = 0;
 
-export function useTestApp(options: { signupOpen?: boolean } = {}) {
+export function useTestApp(options: { signupOpen?: boolean; maxLiveEvents?: number } = {}) {
   const { db, sql } = createDb(TEST_DATABASE_URL);
   const storage = createMemoryStorage();
   const media = createMediaSigner("test-secret-test-secret-test-secret");
@@ -60,6 +60,7 @@ export function useTestApp(options: { signupOpen?: boolean } = {}) {
     retentionMs: RETENTION_MS,
     legal: TEST_LEGAL,
     signupOpen: options.signupOpen ?? true,
+    maxLiveEvents: options.maxLiveEvents ?? 20,
     onRoute: (route) => routes.push(route),
   });
 

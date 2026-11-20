@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
@@ -12,7 +12,7 @@ import {
   type EventStatus,
 } from "@comatch/shared";
 import type { AppContext } from "../context.ts";
-import { event, participant } from "../db/schema.ts";
+import { account, event, participant } from "../db/schema.ts";
 import { eventStats, listParticipants, matchesCsv, participantsCsv } from "../events/report.ts";
 import { purgeEvent } from "../events/retention.ts";
 import { createEvent, getEventDetail, listEvents, replaceQuestions } from "../events/service.ts";
@@ -37,7 +37,7 @@ const statusInput = z.object({ status: z.enum(["draft", "open"]) });
 /** Event-Verwaltung. Läuft im geschützten /admin-Bereich. */
 export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   app,
-  { db, storage, media, live, publicBaseUrl, retentionMs },
+  { db, storage, media, live, publicBaseUrl, retentionMs, maxLiveEvents },
 ) => {
   // Logos kommen als rohe Bilddaten (kein Multipart), begrenzt auf LOGO_MAX_BYTES.
   app.addContentTypeParser(
@@ -62,6 +62,32 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
     if (!row) throw notFound("event_not_found");
     request.event = row;
   });
+
+  /** Vor dem Start: Grenze für gleichzeitig laufende Events, je Konto und für die ganze Instanz. */
+  const assertLiveCapacity = async (accountId: string, eventId: string) => {
+    const others = and(inArray(event.status, ["running", "paused"]), ne(event.id, eventId));
+    const owner = await db.query.account.findFirst({
+      where: eq(account.id, accountId),
+      columns: { maxLiveEvents: true },
+    });
+    const own = await db.$count(event, and(eq(event.accountId, accountId), others));
+    if (own >= (owner?.maxLiveEvents ?? 0)) {
+      throw new HttpError(
+        409,
+        "live_limit",
+        own === 1
+          ? "In eurem Konto läuft schon ein Event. Beendet es, bevor ihr ein weiteres startet."
+          : `In eurem Konto laufen schon ${own} Events. Beendet eines, bevor ihr ein weiteres startet.`,
+      );
+    }
+    if ((await db.$count(event, others)) >= maxLiveEvents) {
+      throw new HttpError(
+        409,
+        "instance_busy",
+        "Gerade laufen sehr viele Events gleichzeitig. Bitte versucht es in ein paar Minuten noch einmal.",
+      );
+    }
+  };
 
   app.get("/events", async (request) => listEvents(db, request.admin!.accountId));
 
@@ -177,6 +203,7 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   app.post("/events/:id/control", async (request) => {
     const { id } = request.event!;
     const { action } = eventControlInput.parse(request.body);
+    if (action === "start") await assertLiveCapacity(request.admin!.accountId, id);
     await live.control(id, action);
     return detail(id);
   });

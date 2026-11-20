@@ -16,8 +16,11 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
+  ACCOUNT_STATUSES,
   ADMIN_ROLES,
   AUTH_TOKEN_KINDS,
+  DEFAULT_MAX_LIVE_EVENTS,
+  DEFAULT_MAX_PARTICIPANTS,
   EVENT_STATUSES,
   LANGUAGES,
   MATCH_GROUP_KINDS,
@@ -26,6 +29,7 @@ import {
   PARTICIPANT_STATUSES,
 } from "@comatch/shared";
 
+export const accountStatus = pgEnum("account_status", ACCOUNT_STATUSES);
 export const adminRole = pgEnum("admin_role", ADMIN_ROLES);
 export const authTokenKind = pgEnum("auth_token_kind", AUTH_TOKEN_KINDS);
 export const eventStatus = pgEnum("event_status", EVENT_STATUSES);
@@ -53,6 +57,12 @@ export const account = pgTable("account", {
   legalName: text(),
   legalAddress: text(),
   legalEmail: text(),
+  /** Gesperrt: kein Login, kein Beitritt zu den Events des Kontos. */
+  status: accountStatus().notNull().default("active"),
+  /** Wie viele Events des Kontos gleichzeitig laufen dürfen (laufend oder pausiert). */
+  maxLiveEvents: integer().notNull().default(DEFAULT_MAX_LIVE_EVENTS),
+  /** Wie viele Personen einem Event des Kontos beitreten dürfen. */
+  maxParticipants: integer().notNull().default(DEFAULT_MAX_PARTICIPANTS),
   createdAt: createdAt(),
 });
 

@@ -45,6 +45,11 @@ const envSchema = z.object({
   /** Absender, z. B. `CoMatch <noreply@example.de>`. Pflicht mit SMTP_URL. */
   MAIL_FROM: optionalText(z.string()),
 
+  /**
+   * Wie viele Events gleichzeitig laufen dürfen, über alle Konten (Schutz der einen Instanz).
+   * Je Konto gilt zusätzlich dessen eigene Grenze.
+   */
+  MAX_LIVE_EVENTS: z.coerce.number().int().positive().default(20),
   /** `open`: Jede Person kann ein eigenes Konto anlegen. `closed`: nur per Einladung. */
   SIGNUP_MODE: z.enum(["open", "closed"]).default("closed"),
 

@@ -35,6 +35,8 @@ services:
       - MAIL_FROM=${MAIL_FROM:-}
       # open: Jede Person kann ein eigenes Konto anlegen (braucht SMTP_URL).
       - SIGNUP_MODE=${SIGNUP_MODE:-closed}
+      # Events, die über alle Konten hinweg gleichzeitig laufen dürfen.
+      - MAX_LIVE_EVENTS=${MAX_LIVE_EVENTS:-20}
       # Impressum und Datenschutzerklärung.
       - LEGAL_NAME=${LEGAL_NAME:?}
       - LEGAL_ADDRESS=${LEGAL_ADDRESS:?}
