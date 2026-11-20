@@ -7,6 +7,7 @@ import {
   clearSessionCookie,
   createSession,
   deleteSession,
+  loadAdminMe,
   normalizeEmail,
   requireAdmin,
   setSessionCookie,
@@ -36,7 +37,7 @@ export const authRoutes: FastifyPluginAsync<AppContext> = async (app, { db, cook
 
       const session = await createSession(db, admin.id);
       setSessionCookie(reply, session.token, session.expiresAt, cookieSecure);
-      return { id: admin.id, email: admin.email } satisfies AdminMe;
+      return (await loadAdminMe(db, admin.id))! satisfies AdminMe;
     },
   );
 

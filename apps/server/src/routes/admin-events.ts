@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import type { FastifyPluginAsync } from "fastify";
+import { and, eq } from "drizzle-orm";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   LOGO_MAX_BYTES,
@@ -9,6 +9,7 @@ import {
   eventGeneralInput,
   defaultQuestions,
   questionsInput,
+  type EventStatus,
 } from "@comatch/shared";
 import type { AppContext } from "../context.ts";
 import { event, participant } from "../db/schema.ts";
@@ -21,7 +22,15 @@ import { randomToken } from "../lib/tokens.ts";
 import { selfiePrefix } from "../participants/service.ts";
 
 const idParams = z.object({ id: z.uuid() });
-const participantParams = z.object({ id: z.uuid(), participantId: z.uuid() });
+const exportParams = z.object({ kind: z.enum(["matches.csv", "participants.csv"]) });
+
+declare module "fastify" {
+  interface FastifyRequest {
+    /** Event aus dem eigenen Konto; bei allen Admin-Routen mit `:id` gesetzt. */
+    event: { id: string; status: EventStatus; slug: string } | null;
+  }
+}
+const participantParams = z.object({ participantId: z.uuid() });
 /** Vorerst nur Entwurf ↔ Offen; Start, Pause und Ende kommen mit der Live-Steuerung. */
 const statusInput = z.object({ status: z.enum(["draft", "open"]) });
 
@@ -39,29 +48,39 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
 
   const detail = (id: string) => getEventDetail(db, id, publicBaseUrl, retentionMs);
 
-  const requireEvent = async (id: string) => {
+  /**
+   * Trennung der Konten an einer Stelle: Jede Route mit `:id` lädt das Event nur aus dem eigenen
+   * Konto. Ein fremdes Event verhält sich wie ein unbekanntes (404). Läuft nach requireAdmin.
+   */
+  app.addHook("onRequest", async (request) => {
+    if (!request.routeOptions.url?.includes("/events/:id")) return;
+    const { id } = idParams.parse(request.params);
     const row = await db.query.event.findFirst({
-      where: eq(event.id, id),
-      columns: { id: true, status: true },
+      where: and(eq(event.id, id), eq(event.accountId, request.admin!.accountId)),
+      columns: { id: true, status: true, slug: true },
     });
     if (!row) throw notFound("event_not_found");
-    return row;
-  };
+    request.event = row;
+  });
 
-  app.get("/events", async () => listEvents(db));
+  app.get("/events", async (request) => listEvents(db, request.admin!.accountId));
 
   app.post("/events", async (request, reply) => {
     const input = eventCreateInput.parse(request.body);
-    const id = await createEvent(db, input, request.admin!.id, defaultQuestions(input.language));
+    const id = await createEvent(
+      db,
+      input,
+      { accountId: request.admin!.accountId, createdBy: request.admin!.id },
+      defaultQuestions(input.language),
+    );
     return reply.code(201).send(await detail(id));
   });
 
-  app.get("/events/:id", async (request) => detail(idParams.parse(request.params).id));
+  app.get("/events/:id", async (request) => detail(request.event!.id));
 
   app.put("/events/:id", async (request) => {
-    const { id } = idParams.parse(request.params);
+    const { id } = request.event!;
     const input = eventGeneralInput.parse(request.body);
-    await requireEvent(id);
     await db
       .update(event)
       .set({
@@ -80,17 +99,16 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   });
 
   app.put("/events/:id/questions", async (request) => {
-    const { id } = idParams.parse(request.params);
+    const { id } = request.event!;
     const questions = questionsInput.parse(request.body);
-    await requireEvent(id);
     await db.transaction((tx) => replaceQuestions(tx, id, questions));
     return detail(id);
   });
 
   app.put("/events/:id/status", async (request) => {
-    const { id } = idParams.parse(request.params);
+    const { id } = request.event!;
     const { status } = statusInput.parse(request.body);
-    const row = await requireEvent(id);
+    const row = request.event!;
     if (row.status === status) return detail(id);
     if (row.status !== "draft" && row.status !== "open") {
       throw new HttpError(409, "status_change_unsupported", "Dieser Statuswechsel ist noch nicht möglich.");
@@ -111,15 +129,14 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   // -------------------------------------------------------------------------
 
   app.get("/events/:id/participants", async (request) => {
-    const { id } = idParams.parse(request.params);
-    await requireEvent(id);
+    const { id } = request.event!;
     return listParticipants(db, media, id, (p) => live.isPresent(p));
   });
 
   /** Eingriff bei unpassendem Selfie: zurücksetzen (neu fotografieren) oder Person entfernen. */
-  const moderate = (action: "reset_selfie" | "remove") => async (request: { params: unknown }) => {
-    const { id, participantId } = participantParams.parse(request.params);
-    await requireEvent(id);
+  const moderate = (action: "reset_selfie" | "remove") => async (request: FastifyRequest) => {
+    const { id } = request.event!;
+    const { participantId } = participantParams.parse(request.params);
     const { selfieKey } = await live.moderate(id, participantId, action);
     if (selfieKey) await storage.deletePrefix(selfiePrefix(id, participantId));
     return listParticipants(db, media, id, (p) => live.isPresent(p));
@@ -128,20 +145,16 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   app.delete("/events/:id/participants/:participantId", moderate("remove"));
 
   app.get("/events/:id/stats", async (request) => {
-    const { id } = idParams.parse(request.params);
-    await requireEvent(id);
+    const { id } = request.event!;
     return eventStats(db, id);
   });
 
   const exports = { matches: matchesCsv, participants: participantsCsv };
   app.get("/events/:id/export/:kind", async (request, reply) => {
-    const { id, kind } = idParams
-      .extend({ kind: z.enum(["matches.csv", "participants.csv"]) })
-      .parse(request.params);
-    const row = await db.query.event.findFirst({ where: eq(event.id, id), columns: { slug: true } });
-    if (!row) throw notFound("event_not_found");
+    const { id, slug } = request.event!;
+    const { kind } = exportParams.parse(request.params);
     const name = kind.replace(".csv", "") as keyof typeof exports;
-    const filename = `comatch-${row.slug}-${name === "matches" ? "matches" : "teilnehmende"}.csv`;
+    const filename = `comatch-${slug}-${name === "matches" ? "matches" : "teilnehmende"}.csv`;
     return reply
       .header("content-type", "text/csv; charset=utf-8")
       .header("content-disposition", `attachment; filename="${filename}"`)
@@ -151,8 +164,8 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
 
   /** Selfies und Sitzungen sofort löschen statt nach Ablauf der Frist (nur beendete Events). */
   app.post("/events/:id/purge", async (request) => {
-    const { id } = idParams.parse(request.params);
-    const row = await requireEvent(id);
+    const { id } = request.event!;
+    const row = request.event!;
     if (row.status !== "ended") {
       throw new HttpError(409, "event_not_ended", "Fotos lassen sich erst nach dem Ende des Events löschen.");
     }
@@ -162,15 +175,14 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
 
   /** Live-Steuerung: Start, Pause, Fortsetzen, nächste Runde, Verlängern, Ende. */
   app.post("/events/:id/control", async (request) => {
-    const { id } = idParams.parse(request.params);
+    const { id } = request.event!;
     const { action } = eventControlInput.parse(request.body);
     await live.control(id, action);
     return detail(id);
   });
 
   app.put("/events/:id/logo", async (request) => {
-    const { id } = idParams.parse(request.params);
-    await requireEvent(id);
+    const { id } = request.event!;
     if (!Buffer.isBuffer(request.body) || request.body.length === 0) {
       throw new HttpError(415, "unsupported_media_type", "Bitte ein PNG-, JPEG- oder WebP-Bild hochladen.");
     }
@@ -185,8 +197,7 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   });
 
   app.delete("/events/:id/logo", async (request) => {
-    const { id } = idParams.parse(request.params);
-    await requireEvent(id);
+    const { id } = request.event!;
     await db
       .update(event)
       .set({ logoData: null, logoMime: null, logoUpdatedAt: null })
@@ -196,8 +207,7 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
 
   /** Erzeugt einen neuen Präsentationslink; der alte funktioniert danach nicht mehr. */
   app.post("/events/:id/presenter-token", async (request) => {
-    const { id } = idParams.parse(request.params);
-    await requireEvent(id);
+    const { id } = request.event!;
     await db
       .update(event)
       .set({ presenterToken: randomToken(24) })
@@ -206,8 +216,8 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
   });
 
   app.delete("/events/:id", async (request, reply) => {
-    const { id } = idParams.parse(request.params);
-    const row = await requireEvent(id);
+    const { id } = request.event!;
+    const row = request.event!;
     if (row.status === "running" || row.status === "paused") {
       throw new HttpError(
         409,

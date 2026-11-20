@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { AdminListItem, InviteCreated, InviteListItem } from "@comatch/shared";
+import type { AdminListItem, AdminMe, InviteCreated, InviteListItem } from "@comatch/shared";
 import { Alert, Button, Card, Field, Input, Spinner } from "../../components/ui.tsx";
 import { api, ApiError, errorMessage } from "../../lib/api.ts";
 import { useAuth } from "../../lib/auth.tsx";
@@ -33,7 +33,7 @@ function InviteForm({ onCreated }: { onCreated: (invite: InviteCreated) => void 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       <Field
-        label="Admin einladen"
+        label="Mitglied einladen"
         htmlFor="invite-email"
         hint="Du bekommst einen Einladungslink, den du selbst weitergibst. Er ist 7 Tage gültig."
         error={error?.issues.email ?? (error && !error.issues.email ? error.message : undefined)}
@@ -57,7 +57,8 @@ function InviteForm({ onCreated }: { onCreated: (invite: InviteCreated) => void 
 }
 
 export function TeamPage() {
-  const { admin: me } = useAuth();
+  const { admin: me, setAdmin } = useAuth();
+  const isOwner = me?.role === "owner";
   const [team, setTeam] = useState<Team | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<InviteCreated | null>(null);
@@ -79,44 +80,59 @@ export function TeamPage() {
     }
   };
 
+  const makeOwner = (a: AdminListItem) => {
+    const question =
+      `${a.email} zur*zum Inhaber*in machen?\n\n` +
+      "Du selbst wirst Mitglied und kannst Team und Konto danach nicht mehr verwalten.";
+    if (!window.confirm(question)) return;
+    void act(async () => {
+      setAdmin(await api<AdminMe>("/admin/account/owner", { method: "POST", body: { adminId: a.id } }));
+    });
+  };
+
   return (
     <>
       <h1 className="mb-6 text-2xl font-semibold">Team</h1>
       <div className="flex flex-col gap-6">
-        <Card className="flex flex-col gap-4">
-          <InviteForm
-            onCreated={(invite) => {
-              setCreated(invite);
-              load();
-            }}
-          />
-          {created && (
-            <Alert tone="info">
-              <p className="mb-2">
-                Einladung für <strong>{created.email}</strong> erstellt. Kopiere den Link jetzt, er wird nur
-                einmal angezeigt:
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  readOnly
-                  value={created.acceptUrl}
-                  className="font-mono text-xs"
-                  onFocus={(e) => e.target.select()}
-                />
-                <Button variant="secondary" onClick={() => void copy(created.acceptUrl)}>
-                  {copied === created.acceptUrl ? "Kopiert ✓" : "Kopieren"}
-                </Button>
-              </div>
-            </Alert>
-          )}
-        </Card>
+        {!isOwner && (
+          <Alert tone="info">Einladen und entfernen kann nur die*der Inhaber*in des Kontos.</Alert>
+        )}
+        {isOwner && (
+          <Card className="flex flex-col gap-4">
+            <InviteForm
+              onCreated={(invite) => {
+                setCreated(invite);
+                load();
+              }}
+            />
+            {created && (
+              <Alert tone="info">
+                <p className="mb-2">
+                  Einladung für <strong>{created.email}</strong> erstellt. Kopiere den Link jetzt, er wird nur
+                  einmal angezeigt:
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={created.acceptUrl}
+                    className="font-mono text-xs"
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <Button variant="secondary" onClick={() => void copy(created.acceptUrl)}>
+                    {copied === created.acceptUrl ? "Kopiert ✓" : "Kopieren"}
+                  </Button>
+                </div>
+              </Alert>
+            )}
+          </Card>
+        )}
 
         {error && <Alert>{error}</Alert>}
         {!team && !error && <Spinner className="text-slate-400" />}
 
         {team && (
           <Card flush className="overflow-hidden">
-            <h2 className="border-b border-slate-200 px-6 py-3 font-semibold">Admins</h2>
+            <h2 className="border-b border-slate-200 px-6 py-3 font-semibold">Mitglieder</h2>
             <ul className="divide-y divide-slate-100">
               {team.admins.map((a) => (
                 <li key={a.id} className="flex items-center gap-4 px-6 py-3">
@@ -124,22 +140,32 @@ export function TeamPage() {
                     <div className="truncate font-medium">
                       {a.email}{" "}
                       {a.id === me?.id && <span className="text-sm font-normal text-slate-500">(du)</span>}
+                      {a.role === "owner" && (
+                        <span className="ml-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                          Inhaber*in
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm text-slate-500">
                       seit {formatDate(a.createdAt)}
                       {a.invitedByEmail && ` · eingeladen von ${a.invitedByEmail}`}
                     </div>
                   </div>
-                  {a.id !== me?.id && (
-                    <Button
-                      variant="ghost"
-                      onClick={() =>
-                        window.confirm(`${a.email} als Admin entfernen?`) &&
-                        void act(() => api(`/admin/admins/${a.id}`, { method: "DELETE" }))
-                      }
-                    >
-                      Entfernen
-                    </Button>
+                  {isOwner && a.id !== me?.id && (
+                    <div className="flex shrink-0 gap-1">
+                      <Button variant="ghost" onClick={() => makeOwner(a)}>
+                        Konto übergeben
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          window.confirm(`${a.email} aus dem Team entfernen?`) &&
+                          void act(() => api(`/admin/admins/${a.id}`, { method: "DELETE" }))
+                        }
+                      >
+                        Entfernen
+                      </Button>
+                    </div>
                   )}
                 </li>
               ))}
@@ -155,12 +181,14 @@ export function TeamPage() {
                         <div className="truncate font-medium">{i.email}</div>
                         <div className="text-sm text-slate-500">gültig bis {formatDate(i.expiresAt)}</div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        onClick={() => void act(() => api(`/admin/invites/${i.id}`, { method: "DELETE" }))}
-                      >
-                        Zurückziehen
-                      </Button>
+                      {isOwner && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => void act(() => api(`/admin/invites/${i.id}`, { method: "DELETE" }))}
+                        >
+                          Zurückziehen
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>

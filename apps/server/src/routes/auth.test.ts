@@ -14,7 +14,13 @@ describe("Admin-Login", () => {
       payload: { email: "  CHRIS@test.local ", password: admin.password },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ id: admin.id, email: "chris@test.local" });
+    expect(res.json()).toEqual({
+      id: admin.id,
+      email: "chris@test.local",
+      accountId: admin.accountId,
+      accountName: "Test-Konto",
+      role: "owner",
+    });
     const cookie = res.cookies.find((c) => c.name === "comatch_admin");
     expect(cookie?.httpOnly).toBe(true);
     expect(cookie?.sameSite).toBe("Lax");

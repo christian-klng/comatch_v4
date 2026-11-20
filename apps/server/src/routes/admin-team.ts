@@ -3,7 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { AdminListItem, InviteCreated, InviteListItem } from "@comatch/shared";
-import { normalizeEmail } from "../auth/session.ts";
+import { normalizeEmail, requireOwner } from "../auth/session.ts";
 import type { AppContext } from "../context.ts";
 import { adminInvite, adminUser } from "../db/schema.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
@@ -14,20 +14,23 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const inviteBody = z.object({ email: z.email("Bitte eine gültige E-Mail eingeben.") });
 const idParams = z.object({ id: z.uuid() });
 
-/** Admins und Einladungen. Läuft im geschützten /admin-Bereich. */
+/** Admins und Einladungen des eigenen Kontos; ändern darf nur die*der Inhaber*in. */
 export const adminTeamRoutes: FastifyPluginAsync<AppContext> = async (app, { db, publicBaseUrl }) => {
   const inviter = alias(adminUser, "inviter");
 
-  app.get("/team", async () => {
+  app.get("/team", async (request) => {
+    const accountId = request.admin!.accountId;
     const admins = await db
       .select({
         id: adminUser.id,
         email: adminUser.email,
+        role: adminUser.role,
         createdAt: adminUser.createdAt,
         invitedByEmail: inviter.email,
       })
       .from(adminUser)
       .leftJoin(inviter, eq(inviter.id, adminUser.invitedBy))
+      .where(eq(adminUser.accountId, accountId))
       .orderBy(asc(adminUser.createdAt));
 
     const invites = await db
@@ -40,7 +43,13 @@ export const adminTeamRoutes: FastifyPluginAsync<AppContext> = async (app, { db,
       })
       .from(adminInvite)
       .leftJoin(inviter, eq(inviter.id, adminInvite.invitedBy))
-      .where(and(isNull(adminInvite.acceptedAt), gt(adminInvite.expiresAt, new Date())))
+      .where(
+        and(
+          eq(adminInvite.accountId, accountId),
+          isNull(adminInvite.acceptedAt),
+          gt(adminInvite.expiresAt, new Date()),
+        ),
+      )
       .orderBy(asc(adminInvite.createdAt));
 
     return {
@@ -56,15 +65,17 @@ export const adminTeamRoutes: FastifyPluginAsync<AppContext> = async (app, { db,
     };
   });
 
-  app.post("/invites", async (request, reply) => {
+  app.post("/invites", { onRequest: requireOwner }, async (request, reply) => {
     const email = normalizeEmail(inviteBody.parse(request.body).email);
+    // E-Mails sind über alle Konten hinweg eindeutig: Eine Person gehört zu genau einem Konto.
     if (await db.query.adminUser.findFirst({ where: eq(adminUser.email, email) })) {
-      throw new HttpError(409, "admin_exists", "Diese Person ist bereits Admin.");
+      throw new HttpError(409, "admin_exists", "Für diese E-Mail gibt es bereits ein Konto.");
     }
     const token = randomToken();
     const [invite] = await db
       .insert(adminInvite)
       .values({
+        accountId: request.admin!.accountId,
         email,
         tokenHash: sha256(token),
         invitedBy: request.admin!.id,
@@ -81,22 +92,25 @@ export const adminTeamRoutes: FastifyPluginAsync<AppContext> = async (app, { db,
     } satisfies InviteCreated);
   });
 
-  app.delete("/invites/:id", async (request, reply) => {
+  app.delete("/invites/:id", { onRequest: requireOwner }, async (request, reply) => {
     const { id } = idParams.parse(request.params);
     const deleted = await db
       .delete(adminInvite)
-      .where(eq(adminInvite.id, id))
+      .where(and(eq(adminInvite.id, id), eq(adminInvite.accountId, request.admin!.accountId)))
       .returning({ id: adminInvite.id });
     if (deleted.length === 0) throw notFound("invite_not_found");
     return reply.code(204).send();
   });
 
-  app.delete("/admins/:id", async (request, reply) => {
+  app.delete("/admins/:id", { onRequest: requireOwner }, async (request, reply) => {
     const { id } = idParams.parse(request.params);
     if (id === request.admin!.id) {
       throw new HttpError(409, "cannot_remove_self", "Du kannst dich nicht selbst entfernen.");
     }
-    const deleted = await db.delete(adminUser).where(eq(adminUser.id, id)).returning({ id: adminUser.id });
+    const deleted = await db
+      .delete(adminUser)
+      .where(and(eq(adminUser.id, id), eq(adminUser.accountId, request.admin!.accountId)))
+      .returning({ id: adminUser.id });
     if (deleted.length === 0) throw notFound("admin_not_found");
     return reply.code(204).send();
   });

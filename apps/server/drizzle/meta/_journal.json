@@ -64,6 +64,20 @@
       "when": 1794905520173,
       "tag": "0008_event_participant_term",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795179683938,
+      "tag": "0009_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795182008275,
+      "tag": "0010_roles",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router";
 import { AuthProvider, RequireAdmin } from "../../lib/auth.tsx";
+import { AccountPage } from "./AccountPage.tsx";
 import { AdminLayout } from "./AdminLayout.tsx";
 import { EventEditPage } from "./EventEditPage.tsx";
 import { EventListPage } from "./EventListPage.tsx";
@@ -25,6 +26,7 @@ export default function AdminApp() {
           <Route index element={<EventListPage />} />
           <Route path="events/:id" element={<EventEditPage />} />
           <Route path="team" element={<TeamPage />} />
+          <Route path="account" element={<AccountPage />} />
         </Route>
       </Routes>
     </AuthProvider>

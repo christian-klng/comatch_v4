@@ -2,7 +2,7 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import type { AdminMe, InvitePreview } from "@comatch/shared";
-import { createSession, setSessionCookie } from "../auth/session.ts";
+import { createSession, loadAdminMe, setSessionCookie } from "../auth/session.ts";
 import type { AppContext } from "../context.ts";
 import { adminInvite, adminUser } from "../db/schema.ts";
 import { HttpError } from "../lib/errors.ts";
@@ -47,15 +47,20 @@ export const inviteRoutes: FastifyPluginAsync<AppContext> = async (app, { db, co
         if (existing) throw new HttpError(409, "admin_exists", "Für diese E-Mail gibt es bereits ein Konto.");
         const [created] = await tx
           .insert(adminUser)
-          .values({ email: invite.email, passwordHash, invitedBy: invite.invitedBy })
-          .returning({ id: adminUser.id, email: adminUser.email });
+          .values({
+            accountId: invite.accountId,
+            email: invite.email,
+            passwordHash,
+            invitedBy: invite.invitedBy,
+          })
+          .returning({ id: adminUser.id });
         await tx.update(adminInvite).set({ acceptedAt: new Date() }).where(eq(adminInvite.id, invite.id));
         return created!;
       });
 
       const session = await createSession(db, admin.id);
       setSessionCookie(reply, session.token, session.expiresAt, cookieSecure);
-      return reply.code(201).send(admin satisfies AdminMe);
+      return reply.code(201).send((await loadAdminMe(db, admin.id))! satisfies AdminMe);
     },
   );
 };

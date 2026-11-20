@@ -1,5 +1,5 @@
 import type { Server as HttpServer } from "node:http";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Server, type Socket } from "socket.io";
 import type {
   ClientToServerEvents,
@@ -89,9 +89,16 @@ async function handleConnection(socket: AppSocket, db: Db, live: LiveEvents) {
   if ("role" in auth && auth.role === "admin") {
     const token = readCookie(socket.handshake.headers.cookie, SESSION_COOKIE);
     const admin = token ? await findAdminBySession(db, token) : null;
-    const state = admin ? await live.eventState(String(auth.eventId)) : null;
+    // Nur Events des eigenen Kontos; ein fremdes Event verhält sich wie ein unbekanntes.
+    const own =
+      admin &&
+      (await db.query.event.findFirst({
+        where: and(eq(event.id, String(auth.eventId)), eq(event.accountId, admin.accountId)),
+        columns: { id: true },
+      }));
+    const state = own ? await live.eventState(own.id) : null;
     if (!state) return reject(socket);
-    await socket.join(rooms.admin(String(auth.eventId)));
+    await socket.join(rooms.admin(own!.id));
     socket.emit("event_state", state);
   }
   // Ohne Rolle (z. B. Statusseite): nur Zeit-Synchronisation.

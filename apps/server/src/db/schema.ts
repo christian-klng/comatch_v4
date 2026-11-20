@@ -16,6 +16,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import {
+  ADMIN_ROLES,
   EVENT_STATUSES,
   LANGUAGES,
   MATCH_GROUP_KINDS,
@@ -24,6 +25,7 @@ import {
   PARTICIPANT_STATUSES,
 } from "@comatch/shared";
 
+export const adminRole = pgEnum("admin_role", ADMIN_ROLES);
 export const eventStatus = pgEnum("event_status", EVENT_STATUSES);
 export const eventLanguage = pgEnum("event_language", LANGUAGES);
 export const participantStatus = pgEnum("participant_status", PARTICIPANT_STATUSES);
@@ -38,16 +40,41 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 });
 
 // ---------------------------------------------------------------------------
-// Admins
+// Konten (Mandanten) und Admins
 // ---------------------------------------------------------------------------
 
-export const adminUser = pgTable("admin_user", {
+/** Ein Konto besitzt Events; Admins und Einladungen gehören zu genau einem Konto. */
+export const account = pgTable("account", {
   id: uuid().primaryKey().defaultRandom(),
-  email: text().notNull().unique(),
-  passwordHash: text().notNull(),
-  invitedBy: uuid().references((): AnyPgColumn => adminUser.id, { onDelete: "set null" }),
+  name: text().notNull(),
+  /** Wer die Events veranstaltet (für den Datenschutzhinweis an Teilnehmende). */
+  legalName: text(),
+  legalAddress: text(),
+  legalEmail: text(),
   createdAt: createdAt(),
 });
+
+export const adminUser = pgTable(
+  "admin_user",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    accountId: uuid()
+      .notNull()
+      .references(() => account.id, { onDelete: "cascade" }),
+    email: text().notNull().unique(),
+    passwordHash: text().notNull(),
+    role: adminRole().notNull().default("member"),
+    invitedBy: uuid().references((): AnyPgColumn => adminUser.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index().on(t.accountId),
+    // Höchstens eine Person je Konto ist Inhaber*in.
+    uniqueIndex("admin_user_one_owner")
+      .on(t.accountId)
+      .where(sql`${t.role} = 'owner'`),
+  ],
+);
 
 export const adminSession = pgTable(
   "admin_session",
@@ -63,58 +90,76 @@ export const adminSession = pgTable(
   (t) => [index().on(t.adminId)],
 );
 
-export const adminInvite = pgTable("admin_invite", {
-  id: uuid().primaryKey().defaultRandom(),
-  email: text().notNull(),
-  /** SHA-256 des Einladungs-Tokens; der Klartext steht nur im Einladungslink. */
-  tokenHash: text().notNull().unique(),
-  invitedBy: uuid().references(() => adminUser.id, { onDelete: "set null" }),
-  createdAt: createdAt(),
-  expiresAt: timestamp({ withTimezone: true }).notNull(),
-  acceptedAt: timestamp({ withTimezone: true }),
-});
+export const adminInvite = pgTable(
+  "admin_invite",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    accountId: uuid()
+      .notNull()
+      .references(() => account.id, { onDelete: "cascade" }),
+    email: text().notNull(),
+    /** SHA-256 des Einladungs-Tokens; der Klartext steht nur im Einladungslink. */
+    tokenHash: text().notNull().unique(),
+    invitedBy: uuid().references(() => adminUser.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    acceptedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.accountId)],
+);
 
 // ---------------------------------------------------------------------------
 // Event und Fragen
 // ---------------------------------------------------------------------------
 
-export const event = pgTable("event", {
-  id: uuid().primaryKey().defaultRandom(),
-  /** Kurzer Code für den Teilnahme-Link (/e/:slug). */
-  slug: text().notNull().unique(),
-  title: text().notNull(),
-  startsAt: timestamp({ withTimezone: true }),
-  status: eventStatus().notNull().default("draft"),
-  /** Sprache der Oberfläche für Teilnehmende und Leinwand (Fragen schreiben Admins selbst). */
-  language: eventLanguage().notNull().default("de"),
-  roundDurationS: integer().notNull().default(300),
-  firstMatchDelayS: integer().notNull().default(30),
-  currentRound: integer().notNull().default(0),
-  roundEndsAt: timestamp({ withTimezone: true }),
-  /** Restzeit der Runde, während das Event pausiert ist (roundEndsAt ist dann leer). */
-  pausedRemainingMs: integer(),
-  /**
-   * Token, mit dem die Präsentationsansicht ohne Admin-Login lesen darf. Bewusst im Klartext,
-   * damit Admins den Link jederzeit erneut anzeigen können; es gewährt nur Lesezugriff.
-   */
-  presenterToken: text()
-    .notNull()
-    .unique()
-    .default(sql`replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')`),
-  /** Logos sind klein (≤ 512 KB) und liegen direkt in der DB; Selfies kommen in den Object Storage. */
-  logoData: bytea(),
-  logoMime: text(),
-  logoUpdatedAt: timestamp({ withTimezone: true }),
-  primaryColor: text(),
-  /** Bezeichnung der Teilnehmenden auf der Leinwand; leer: Standard der Sprache. */
-  participantTermSingular: text(),
-  participantTermPlural: text(),
-  createdBy: uuid().references(() => adminUser.id, { onDelete: "set null" }),
-  createdAt: createdAt(),
-  endedAt: timestamp({ withTimezone: true }),
-  /** Selfies und Sitzungen gelöscht (automatisch nach Ablauf der Frist oder per Admin). */
-  purgedAt: timestamp({ withTimezone: true }),
-});
+export const event = pgTable(
+  "event",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    /**
+     * Besitzer des Events. Bewusst ohne Kaskade: Ein Konto wird über einen eigenen Ablauf gelöscht,
+     * der auch den Bild-Speicher leert.
+     */
+    accountId: uuid()
+      .notNull()
+      .references(() => account.id, { onDelete: "restrict" }),
+    /** Kurzer Code für den Teilnahme-Link (/e/:slug). */
+    slug: text().notNull().unique(),
+    title: text().notNull(),
+    startsAt: timestamp({ withTimezone: true }),
+    status: eventStatus().notNull().default("draft"),
+    /** Sprache der Oberfläche für Teilnehmende und Leinwand (Fragen schreiben Admins selbst). */
+    language: eventLanguage().notNull().default("de"),
+    roundDurationS: integer().notNull().default(300),
+    firstMatchDelayS: integer().notNull().default(30),
+    currentRound: integer().notNull().default(0),
+    roundEndsAt: timestamp({ withTimezone: true }),
+    /** Restzeit der Runde, während das Event pausiert ist (roundEndsAt ist dann leer). */
+    pausedRemainingMs: integer(),
+    /**
+     * Token, mit dem die Präsentationsansicht ohne Admin-Login lesen darf. Bewusst im Klartext,
+     * damit Admins den Link jederzeit erneut anzeigen können; es gewährt nur Lesezugriff.
+     */
+    presenterToken: text()
+      .notNull()
+      .unique()
+      .default(sql`replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')`),
+    /** Logos sind klein (≤ 512 KB) und liegen direkt in der DB; Selfies kommen in den Object Storage. */
+    logoData: bytea(),
+    logoMime: text(),
+    logoUpdatedAt: timestamp({ withTimezone: true }),
+    primaryColor: text(),
+    /** Bezeichnung der Teilnehmenden auf der Leinwand; leer: Standard der Sprache. */
+    participantTermSingular: text(),
+    participantTermPlural: text(),
+    createdBy: uuid().references(() => adminUser.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    endedAt: timestamp({ withTimezone: true }),
+    /** Selfies und Sitzungen gelöscht (automatisch nach Ablauf der Frist oder per Admin). */
+    purgedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.accountId)],
+);
 
 export const question = pgTable(
   "question",

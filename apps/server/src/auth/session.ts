@@ -2,7 +2,7 @@ import { and, eq, gt } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AdminMe } from "@comatch/shared";
 import type { Db } from "../db/client.ts";
-import { adminSession, adminUser } from "../db/schema.ts";
+import { account, adminSession, adminUser } from "../db/schema.ts";
 import { HttpError } from "../lib/errors.ts";
 import { randomToken, sha256 } from "../lib/tokens.ts";
 
@@ -22,12 +22,32 @@ export async function createSession(db: Db, adminId: string): Promise<{ token: s
   return { token, expiresAt };
 }
 
+const meColumns = {
+  id: adminUser.id,
+  email: adminUser.email,
+  accountId: adminUser.accountId,
+  accountName: account.name,
+  role: adminUser.role,
+};
+
 export async function findAdminBySession(db: Db, token: string): Promise<AdminMe | null> {
   const [row] = await db
-    .select({ id: adminUser.id, email: adminUser.email })
+    .select(meColumns)
     .from(adminSession)
     .innerJoin(adminUser, eq(adminUser.id, adminSession.adminId))
+    .innerJoin(account, eq(account.id, adminUser.accountId))
     .where(and(eq(adminSession.tokenHash, sha256(token)), gt(adminSession.expiresAt, new Date())))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Die Angaben, die das Frontend über die angemeldete Person kennt. */
+export async function loadAdminMe(db: Db, adminId: string): Promise<AdminMe | null> {
+  const [row] = await db
+    .select(meColumns)
+    .from(adminUser)
+    .innerJoin(account, eq(account.id, adminUser.accountId))
+    .where(eq(adminUser.id, adminId))
     .limit(1);
   return row ?? null;
 }
@@ -57,6 +77,13 @@ export function requireAdmin(db: Db) {
     request.admin = token ? await findAdminBySession(db, token) : null;
     if (!request.admin) throw new HttpError(401, "unauthorized", "Bitte anmelden.");
   };
+}
+
+/** onRequest-Hook nach requireAdmin: nur für die*den Inhaber*in des Kontos, sonst 403. */
+export async function requireOwner(request: FastifyRequest) {
+  if (request.admin?.role !== "owner") {
+    throw new HttpError(403, "owner_only", "Das darf nur die*der Inhaber*in des Kontos.");
+  }
 }
 
 export function normalizeEmail(email: string): string {

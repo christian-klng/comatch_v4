@@ -7,27 +7,33 @@ import { createEvent } from "../events/service.ts";
 import { hashPassword } from "../lib/password.ts";
 import { createDb, type Db } from "./client.ts";
 import { runMigrations } from "./migrate.ts";
-import { adminUser, event } from "./schema.ts";
+import { account, adminUser, event } from "./schema.ts";
 
 const DEMO_SLUG = "demo";
 
 async function seedAdmin(db: Db, email: string, password: string) {
   const existing = await db.query.adminUser.findFirst({ where: eq(adminUser.email, email) });
   if (existing) return existing;
+  const [demoAccount] = await db.insert(account).values({ name: "Demo-Konto" }).returning();
   const [created] = await db
     .insert(adminUser)
-    .values({ email, passwordHash: await hashPassword(password) })
+    .values({
+      accountId: demoAccount!.id,
+      email,
+      passwordHash: await hashPassword(password),
+      role: "owner",
+    })
     .returning();
   return created!;
 }
 
-async function seedDemoEvent(db: Db, createdBy: string) {
+async function seedDemoEvent(db: Db, owner: { accountId: string; createdBy: string }) {
   const existing = await db.query.event.findFirst({ where: eq(event.slug, DEMO_SLUG) });
   if (existing) return existing;
   const id = await createEvent(
     db,
     { title: "Demo Founders Night", startsAt: null, slug: DEMO_SLUG },
-    createdBy,
+    owner,
     DEFAULT_QUESTIONS,
   );
   return (await db.query.event.findFirst({ where: eq(event.id, id) }))!;
@@ -44,7 +50,7 @@ const { db, sql } = createDb(config.DATABASE_URL);
 try {
   await runMigrations(db);
   const admin = await seedAdmin(db, normalizeEmail(email), password);
-  const demo = await seedDemoEvent(db, admin.id);
+  const demo = await seedDemoEvent(db, { accountId: admin.accountId, createdBy: admin.id });
   console.log(`Admin: ${admin.email}`);
   console.log(`Demo-Event: ${demo.title} → ${config.PUBLIC_BASE_URL}/e/${demo.slug}`);
 } finally {

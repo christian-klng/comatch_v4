@@ -9,6 +9,7 @@ import { requireAdmin } from "./auth/session.ts";
 import type { AppContext } from "./context.ts";
 import { errorHandler, HttpError } from "./lib/errors.ts";
 import { securityHeaders } from "./lib/security-headers.ts";
+import { adminAccountRoutes } from "./routes/admin-account.ts";
 import { adminEventRoutes } from "./routes/admin-events.ts";
 import { adminTeamRoutes } from "./routes/admin-team.ts";
 import { authRoutes } from "./routes/auth.ts";
@@ -27,11 +28,18 @@ export interface AppOptions extends AppContext {
   pingDb?: () => Promise<void>;
   /** X-Forwarded-For vertrauen; nur hinter einem Reverse-Proxy einschalten. */
   trustProxy?: boolean;
+  /** Wird für jede registrierte Route aufgerufen (für Tests, die alle Routen prüfen). */
+  onRoute?: (route: { method: string; url: string }) => void;
 }
 
 export async function buildApp(options: AppOptions) {
-  const { logger, webDistDir, pingDb, trustProxy = false, ...context } = options;
+  const { logger, webDistDir, pingDb, trustProxy = false, onRoute, ...context } = options;
   const app = Fastify({ logger: logger ?? false, trustProxy });
+  if (onRoute) {
+    app.addHook("onRoute", (route) => {
+      for (const method of [route.method].flat()) onRoute({ method, url: route.url });
+    });
+  }
 
   const headers = securityHeaders(context.publicBaseUrl);
   app.addHook("onSend", async (_request, reply) => {
@@ -40,6 +48,7 @@ export async function buildApp(options: AppOptions) {
 
   app.decorateRequest("admin", null);
   app.decorateRequest("participant", null);
+  app.decorateRequest("event", null);
   app.setErrorHandler(errorHandler);
   await app.register(fastifyCookie);
   await app.register(fastifyRateLimit, {
@@ -73,6 +82,7 @@ export async function buildApp(options: AppOptions) {
           admin.addHook("onRequest", requireAdmin(context.db));
           await admin.register(adminEventRoutes, context);
           await admin.register(adminTeamRoutes, context);
+          await admin.register(adminAccountRoutes, context);
         },
         { prefix: "/admin" },
       );

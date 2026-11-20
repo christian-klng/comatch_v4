@@ -10,7 +10,7 @@ import {
 } from "@comatch/shared";
 import { buildApp } from "../src/app.ts";
 import { createDb } from "../src/db/client.ts";
-import { adminUser, event } from "../src/db/schema.ts";
+import { account, adminUser, event } from "../src/db/schema.ts";
 import { createEvent } from "../src/events/service.ts";
 import { createMediaSigner } from "../src/lib/media.ts";
 import { createManualClock } from "../src/live/clock.ts";
@@ -46,6 +46,7 @@ export function useTestApp() {
   const live = new LiveEvents({ db, media, clock });
   const emits = recordingEmitter();
   live.attach(emits);
+  const routes: { method: string; url: string }[] = [];
   const appPromise = buildApp({
     db,
     storage,
@@ -55,6 +56,7 @@ export function useTestApp() {
     cookieSecure: false,
     retentionMs: RETENTION_MS,
     legal: TEST_LEGAL,
+    onRoute: (route) => routes.push(route),
   });
 
   beforeEach(async () => {
@@ -87,22 +89,45 @@ export function useTestApp() {
     /** Spult die Testuhr vor; Timer laufen und deren DB-Arbeit wird jeweils abgewartet. */
     advance: (ms: number) => clock.advance(ms, () => live.idle()),
 
-    /** Legt ein Event mit den Standardfragen an (Status standardmäßig „offen“). */
-    async createEvent(status: EventStatus = "open", slug = "testev") {
+    /** Alle registrierten Routen (Methode und Muster wie `/api/admin/events/:id`). */
+    routes,
+
+    /** Konto mit diesem Namen; wird beim ersten Aufruf angelegt. Ohne Angabe: das Standardkonto. */
+    async account(name = "Test-Konto") {
+      const existing = await db.query.account.findFirst({ where: eq(account.name, name) });
+      if (existing) return existing.id;
+      const [created] = await db.insert(account).values({ name }).returning({ id: account.id });
+      return created!.id;
+    },
+
+    /** Legt ein Event mit den Standardfragen an (Status standardmäßig „offen“, im Standardkonto). */
+    async createEvent(status: EventStatus = "open", slug = "testev", accountName?: string) {
       const id = await createEvent(
         db,
         { title: "Test-Event", startsAt: null, slug },
-        null,
+        { accountId: await ctx.account(accountName), createdBy: null },
         DEFAULT_QUESTIONS,
       );
       await db.update(event).set({ status }).where(eq(event.id, id));
       return { id, slug };
     },
 
-    async createAdmin(email = "admin@test.local", password = "richtig-langes-passwort") {
+    async createAdmin(
+      email = "admin@test.local",
+      password = "richtig-langes-passwort",
+      accountName?: string,
+    ) {
+      const accountId = await ctx.account(accountName);
+      // Wie im Betrieb: Die erste Person eines Kontos ist Inhaber*in, alle weiteren Mitglieder.
+      const first = (await db.$count(adminUser, eq(adminUser.accountId, accountId))) === 0;
       const [admin] = await db
         .insert(adminUser)
-        .values({ email, passwordHash: await hashPassword(password) })
+        .values({
+          accountId,
+          email,
+          passwordHash: await hashPassword(password),
+          role: first ? "owner" : "member",
+        })
         .returning();
       return { ...admin!, password };
     },
@@ -111,8 +136,8 @@ export function useTestApp() {
      * Legt einen Admin an, meldet ihn an und gibt das Session-Cookie zurück. Jeder Login kommt von
      * einer eigenen Adresse, damit das Login-Limit (10 je IP) nicht über viele Tests hinweg greift.
      */
-    async loginAs(email = "admin@test.local") {
-      const admin = await ctx.createAdmin(email);
+    async loginAs(email = "admin@test.local", accountName?: string) {
+      const admin = await ctx.createAdmin(email, undefined, accountName);
       loginCount += 1;
       const res = await (
         await appPromise

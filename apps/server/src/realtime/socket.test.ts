@@ -92,7 +92,7 @@ describe("Socket.IO", () => {
     await next(wrong, "disconnect");
   });
 
-  it("lässt Admins nur mit gültigem Session-Cookie zu", async () => {
+  it("lässt Admins nur mit gültigem Session-Cookie und nur für Events des eigenen Kontos zu", async () => {
     const { id: eventId } = await t.createEvent("open");
     const { cookie } = await t.loginAs();
 
@@ -101,5 +101,9 @@ describe("Socket.IO", () => {
 
     const anonymous = connect({ role: "admin", eventId });
     await next(anonymous, "disconnect");
+
+    const { cookie: foreign } = await t.loginAs("fremd@test.local", "Anderes Konto");
+    const other = connect({ role: "admin", eventId }, { cookie: foreign });
+    await next(other, "disconnect");
   });
 });

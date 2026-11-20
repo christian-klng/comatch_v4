@@ -34,7 +34,8 @@ function toSummary(
   } satisfies EventSummary;
 }
 
-export async function listEvents(db: Db): Promise<EventSummary[]> {
+/** Alle Events eines Kontos, neueste zuerst. */
+export async function listEvents(db: Db, accountId: string): Promise<EventSummary[]> {
   const rows = await db
     .select({
       id: event.id,
@@ -49,6 +50,7 @@ export async function listEvents(db: Db): Promise<EventSummary[]> {
       ),
     })
     .from(event)
+    .where(eq(event.accountId, accountId))
     .orderBy(desc(event.createdAt));
   return rows.map((row) => toSummary(row, row.participantCount));
 }
@@ -173,7 +175,7 @@ export async function replaceQuestions(tx: Tx, eventId: string, questions: Quest
 export async function createEvent(
   db: Db,
   input: Omit<EventCreateInput, "language"> & { language?: Language; slug?: string },
-  createdBy: string | null,
+  owner: { accountId: string; createdBy: string | null },
   questions: QuestionInput[],
 ): Promise<string> {
   return db.transaction(async (tx) => {
@@ -184,11 +186,12 @@ export async function createEvent(
     const [created] = await tx
       .insert(event)
       .values({
+        accountId: owner.accountId,
         slug,
         title: input.title,
         startsAt: input.startsAt ? new Date(input.startsAt) : null,
         language: input.language,
-        createdBy,
+        createdBy: owner.createdBy,
       })
       .returning({ id: event.id });
     await replaceQuestions(tx, created!.id, questions);

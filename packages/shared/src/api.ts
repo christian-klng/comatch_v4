@@ -1,4 +1,5 @@
 // Antwort-Typen der HTTP-API.
+import type { AdminRole } from "./account.ts";
 import type { EventStatus, Language, MatchGroupKind, ParticipantStatus } from "./domain.ts";
 import type { QuestionInput } from "./event-config.ts";
 
@@ -12,11 +13,16 @@ export interface ApiErrorBody {
 export interface AdminMe {
   id: string;
   email: string;
+  /** Konto (Mandant), dem die Person angehört; sie sieht nur dessen Events und Team. */
+  accountId: string;
+  accountName: string;
+  role: AdminRole;
 }
 
 export interface AdminListItem {
   id: string;
   email: string;
+  role: AdminRole;
   createdAt: string;
   invitedByEmail: string | null;
 }

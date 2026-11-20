@@ -31,9 +31,15 @@ export function AdminLayout() {
             <NavLink to="/admin/team" className={navClass}>
               Team
             </NavLink>
+            <NavLink to="/admin/account" className={navClass}>
+              Konto
+            </NavLink>
           </nav>
           <div className="ml-auto flex items-center gap-3">
-            <span className="hidden text-sm text-slate-500 sm:inline">{admin?.email}</span>
+            <span className="hidden text-right text-sm leading-tight sm:block">
+              <span className="block font-medium text-slate-700">{admin?.accountName}</span>
+              <span className="block text-slate-500">{admin?.email}</span>
+            </span>
             <Button variant="ghost" onClick={() => void logout()}>
               Abmelden
             </Button>
