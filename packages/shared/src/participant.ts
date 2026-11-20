@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { EventStatus, Language, ParticipantStatus } from "./domain.ts";
 import { QUESTION_COUNT } from "./event-config.ts";
+import type { Organizer } from "./account.ts";
 
 /** Technische Obergrenze je Event; jedes Konto hat darunter seine eigene Grenze (max_participants). */
 export const MAX_PARTICIPANTS_PER_EVENT = 250;
@@ -30,6 +31,8 @@ export interface PublicEvent {
   language: Language;
   status: EventStatus;
   joinable: boolean;
+  /** Veranstalter als Verantwortlicher; null: Der Betreiber der Plattform veranstaltet selbst. */
+  organizer: Organizer | null;
   roundDurationS: number;
   logoUrl: string | null;
   primaryColor: string | null;

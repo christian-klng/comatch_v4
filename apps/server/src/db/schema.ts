@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   customType,
   index,
@@ -57,6 +58,14 @@ export const account = pgTable("account", {
   legalName: text(),
   legalAddress: text(),
   legalEmail: text(),
+  /**
+   * Der Betreiber der Plattform veranstaltet selbst: Solange die Angaben oben fehlen, gelten
+   * dessen Angaben aus der Server-Konfiguration (LEGAL_*). Für selbst registrierte Konten false.
+   */
+  legalFromOperator: boolean().notNull().default(false),
+  /** Zustimmung zu Nutzungsbedingungen und AV-Vertrag bei der Registrierung, mit Fassung. */
+  termsAcceptedAt: timestamp({ withTimezone: true }),
+  termsVersion: text(),
   /** Gesperrt: kein Login, kein Beitritt zu den Events des Kontos. */
   status: accountStatus().notNull().default("active"),
   /** Wie viele Events des Kontos gleichzeitig laufen dürfen (laufend oder pausiert). */

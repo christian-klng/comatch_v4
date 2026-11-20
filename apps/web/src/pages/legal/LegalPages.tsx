@@ -1,15 +1,18 @@
 // Impressum und Datenschutzerklärung. Die Betreiber-Angaben kommen aus der Server-Konfiguration
 // (LEGAL_*). Der Text der Datenschutzerklärung ist ein Entwurf, der zur App passt; vor dem
 // Produktivbetrieb mit einer Datenschutzberatung abstimmen.
-import type { Language, LegalInfo } from "@comatch/shared";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router";
+import type { Language, LegalInfo, Organizer, PublicEvent } from "@comatch/shared";
 import { Spinner } from "../../components/ui.tsx";
-import { messagesFor } from "../../i18n/index.tsx";
+import { LEGAL_PATHS, messagesFor } from "../../i18n/index.tsx";
+import { api } from "../../lib/api.ts";
 import { useLegal } from "../../lib/legal.ts";
 import { PrivacyEn } from "./PrivacyEn.tsx";
-import { Missing, Operator, Section, Shell } from "./parts.tsx";
+import { Missing, Operator, OrganizerAddress, Section, Shell } from "./parts.tsx";
 
-const STAND = "28.10.2026";
-const STAND_EN = "28 October 2026";
+const STAND = "20.11.2026";
+const STAND_EN = "20 November 2026";
 
 export function ImprintPage({ language = "de" }: { language?: Language }) {
   const legal = useLegal();
@@ -35,17 +38,52 @@ export function ImprintPage({ language = "de" }: { language?: Language }) {
   );
 }
 
-export function PrivacyPage({ language = "de" }: { language?: Language }) {
+/**
+ * /e/:slug/datenschutz und /e/:slug/privacy: Datenschutzerklärung für die Teilnehmenden eines
+ * Events. Verantwortlich ist dessen Veranstalter; der Betreiber der Plattform arbeitet in dessen
+ * Auftrag. Ohne Veranstalter-Angaben (Events des Betreibers) gilt die allgemeine Fassung.
+ */
+export function EventPrivacyPage({ language = "de" }: { language?: Language }) {
+  const { slug = "" } = useParams();
+  const [organizer, setOrganizer] = useState<Organizer | null | undefined>(undefined);
+  useEffect(() => {
+    api<PublicEvent>(`/events/${encodeURIComponent(slug)}`)
+      .then((event) => setOrganizer(event.organizer))
+      .catch(() => setOrganizer(null));
+  }, [slug]);
+  if (organizer === undefined) return null;
+  return (
+    <PrivacyPage
+      language={language}
+      organizer={organizer}
+      privacyPath={`/e/${slug}${LEGAL_PATHS[language].privacy}`}
+    />
+  );
+}
+
+export function PrivacyPage({
+  language = "de",
+  organizer = null,
+  privacyPath,
+}: {
+  language?: Language;
+  organizer?: Organizer | null;
+  privacyPath?: string;
+}) {
   const legal = useLegal();
   const title = messagesFor(language).legal.privacyTitle;
   return (
-    <Shell language={language} title={title}>
+    <Shell language={language} title={title} privacyPath={privacyPath}>
       {!legal ? (
         <Spinner className="text-slate-400" />
       ) : (
         <>
           {!legal.configured && <Missing language={language} />}
-          {language === "en" ? <PrivacyEn legal={legal} /> : <PrivacyDe legal={legal} />}
+          {language === "en" ? (
+            <PrivacyEn legal={legal} organizer={organizer} />
+          ) : (
+            <PrivacyDe legal={legal} organizer={organizer} />
+          )}
           <p className="text-sm text-slate-500">
             {language === "en" ? `Last updated: ${STAND_EN}` : `Stand: ${STAND}`}
           </p>
@@ -55,7 +93,7 @@ export function PrivacyPage({ language = "de" }: { language?: Language }) {
   );
 }
 
-function PrivacyDe({ legal }: { legal: LegalInfo }) {
+function PrivacyDe({ legal, organizer }: { legal: LegalInfo; organizer: Organizer | null }) {
   const hours = legal.retentionHours;
   return (
     <>
@@ -66,8 +104,21 @@ function PrivacyDe({ legal }: { legal: LegalInfo }) {
       </p>
 
       <Section title="1. Verantwortlich">
-        <Operator legal={legal} language="de" />
-        {legal.dpo && <p>Datenschutzbeauftragte*r: {legal.dpo}</p>}
+        {organizer ? (
+          <>
+            <p>Verantwortlich für die Verarbeitung deiner Daten ist der Veranstalter dieses Events:</p>
+            <OrganizerAddress organizer={organizer} language="de" />
+            <p>
+              „Wir“ meint in dieser Erklärung den Veranstalter. Die App CoMatch betreibt in seinem Auftrag{" "}
+              {legal.name ?? "der Betreiber der Plattform"} (siehe Abschnitt 6).
+            </p>
+          </>
+        ) : (
+          <>
+            <Operator legal={legal} language="de" />
+            {legal.dpo && <p>Datenschutzbeauftragte*r: {legal.dpo}</p>}
+          </>
+        )}
       </Section>
 
       <Section title="2. Welche Daten wir verarbeiten">
@@ -139,6 +190,13 @@ function PrivacyDe({ legal }: { legal: LegalInfo }) {
       </Section>
 
       <Section title="6. Hosting und Empfänger">
+        {organizer && (
+          <p>
+            Die App CoMatch betreibt {legal.name ?? "der Betreiber der Plattform"}
+            {legal.address ? `, ${legal.address.replace(/\n/g, ", ")},` : ""} für uns (Auftragsverarbeitung
+            nach Art. 28 DSGVO).
+          </p>
+        )}
         <p>
           Server und Bildspeicher betreibt die Hetzner Online GmbH in Deutschland für uns
           (Auftragsverarbeitung nach Art. 28 DSGVO). Eine Übermittlung in Drittländer findet nicht statt. Wir
@@ -158,6 +216,28 @@ function PrivacyDe({ legal }: { legal: LegalInfo }) {
           Bundesland, in dem du wohnst oder in dem das Event stattfindet.
         </p>
       </Section>
+
+      {!organizer && (
+        <Section title="8. Konten von Veranstaltern">
+          <p>
+            Wer mit CoMatch eigene Events durchführt, legt ein Konto an. Dafür verarbeiten wir die
+            E-Mail-Adresse, das Passwort (nur als Hash), den Namen des Kontos, die eingetragenen Angaben zum
+            Veranstalter, den Zeitpunkt der Zustimmung zu den Nutzungsbedingungen und die Anmeldungen
+            (Sitzungs-Cookie, technisch erforderlich nach § 25 Abs. 2 Nr. 2 TDDDG). Rechtsgrundlage ist die
+            Erfüllung des Nutzungsvertrags (Art. 6 Abs. 1 lit. b DSGVO).
+          </p>
+          <p>
+            An die E-Mail-Adresse schicken wir nur Mails, die für das Konto nötig sind: die Bestätigung der
+            Adresse, Einladungen ins Team und Links zum Zurücksetzen des Passworts. Den Versand übernimmt ein
+            Mail-Dienstleister in unserem Auftrag.
+          </p>
+          <p>
+            Die Daten bleiben gespeichert, solange das Konto besteht. Die*der Inhaber*in kann es unter „Konto“
+            jederzeit löschen; dabei werden alle Events, Fotos, Mitglieder und Einladungen entfernt. Konten,
+            deren E-Mail-Adresse nie bestätigt wurde, löschen wir nach 7 Tagen automatisch.
+          </p>
+        </Section>
+      )}
     </>
   );
 }

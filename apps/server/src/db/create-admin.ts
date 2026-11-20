@@ -31,7 +31,10 @@ async function resolveAccount(db: Db, name: string | undefined): Promise<string 
   const wanted = name ?? accounts[0]?.name ?? "Hauptkonto";
   const existing = accounts.find((a) => a.name === wanted);
   if (existing) return existing.id;
-  const [created] = await db.insert(account).values({ name: wanted }).returning({ id: account.id });
+  const [created] = await db
+    .insert(account)
+    .values({ name: wanted, legalFromOperator: true })
+    .returning({ id: account.id });
   return created!.id;
 }
 

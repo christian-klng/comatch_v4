@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Spinner, cx } from "../../components/ui.tsx";
-import { LEGAL_PATHS, useLanguage, useT } from "../../i18n/index.tsx";
+import { usePrivacyPath } from "../../components/LegalLinks.tsx";
+import { useT } from "../../i18n/index.tsx";
 import { useLegal } from "../../lib/legal.ts";
 import { fileToSelfieBlob, toSelfieBlob } from "../../lib/selfie.ts";
 import { PrimaryButton, SecondaryButton } from "./parts.tsx";
@@ -85,7 +86,7 @@ export function SelfieStep({
   const [consent, setConsent] = useState(!needsConsent);
   const legal = useLegal();
   const t = useT();
-  const language = useLanguage();
+  const privacyPath = usePrivacyPath();
   const [captureError, setCaptureError] = useState<string | null>(null);
 
   const capture = async () => {
@@ -185,12 +186,7 @@ export function SelfieStep({
                 />
                 <span>
                   {t.selfie.consent(legal?.retentionHours ?? 24)}{" "}
-                  <a
-                    href={LEGAL_PATHS[language].privacy}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-slate-100 underline"
-                  >
+                  <a href={privacyPath} target="_blank" rel="noreferrer" className="text-slate-100 underline">
                     {t.selfie.privacyPolicy}
                   </a>
                 </span>

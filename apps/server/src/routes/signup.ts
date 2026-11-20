@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
-import { signupInput, type AdminMe } from "@comatch/shared";
+import { signupInput, TERMS_VERSION, type AdminMe } from "@comatch/shared";
 import { createSession, loadAdminMe, normalizeEmail, setSessionCookie } from "../auth/session.ts";
 import type { AppContext } from "../context.ts";
 import { account, adminUser, authToken } from "../db/schema.ts";
@@ -64,7 +64,7 @@ export const signupRoutes: FastifyPluginAsync<AppContext> = async (app, context)
       const created = await db.transaction(async (tx) => {
         const [acc] = await tx
           .insert(account)
-          .values({ name: input.accountName })
+          .values({ name: input.accountName, termsAcceptedAt: new Date(), termsVersion: TERMS_VERSION })
           .returning({ id: account.id });
         const [admin] = await tx
           .insert(adminUser)

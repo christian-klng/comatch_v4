@@ -1,16 +1,19 @@
 // Bausteine für Impressum und Datenschutzerklärung in beiden Sprachen.
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import type { Language, LegalInfo } from "@comatch/shared";
+import type { Language, LegalInfo, Organizer } from "@comatch/shared";
 import { I18nProvider, LEGAL_PATHS, messagesFor } from "../../i18n/index.tsx";
 
 export function Shell({
   language,
   title,
+  privacyPath,
   children,
 }: {
   language: Language;
   title: string;
+  /** Abweichender Pfad zur Datenschutzerklärung (Fassung eines Events). */
+  privacyPath?: string;
   children: ReactNode;
 }) {
   const t = messagesFor(language);
@@ -30,7 +33,7 @@ export function Shell({
             <Link to={paths.imprint} className="hover:text-slate-900">
               {t.common.imprint}
             </Link>
-            <Link to={paths.privacy} className="hover:text-slate-900">
+            <Link to={privacyPath ?? paths.privacy} className="hover:text-slate-900">
               {t.common.privacy}
             </Link>
           </nav>
@@ -54,6 +57,25 @@ export function Missing({ language }: { language: Language }) {
     <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">
       {messagesFor(language).legal.missing}
     </p>
+  );
+}
+
+/** Veranstalter eines Events als Verantwortlicher. */
+export function OrganizerAddress({ organizer, language }: { organizer: Organizer; language: Language }) {
+  const t = messagesFor(language).legal;
+  return (
+    <address className="not-italic">
+      <p className="font-medium">{organizer.name}</p>
+      {organizer.address.split(/\n|,\s*/).map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+      <p>
+        {t.email}:{" "}
+        <a href={`mailto:${organizer.email}`} className="text-brand underline">
+          {organizer.email}
+        </a>
+      </p>
+    </address>
   );
 }
 

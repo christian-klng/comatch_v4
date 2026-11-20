@@ -105,7 +105,16 @@ export function useTestApp(options: { signupOpen?: boolean; maxLiveEvents?: numb
     async account(name = "Test-Konto") {
       const existing = await db.query.account.findFirst({ where: eq(account.name, name) });
       if (existing) return existing.id;
-      const [created] = await db.insert(account).values({ name }).returning({ id: account.id });
+      // Mit Veranstalter-Angaben, damit sich Events öffnen lassen.
+      const [created] = await db
+        .insert(account)
+        .values({
+          name,
+          legalName: "Test GmbH",
+          legalAddress: "Teststraße 1, 12345 Berlin",
+          legalEmail: "kontakt@test.local",
+        })
+        .returning({ id: account.id });
       return created!.id;
     },
 

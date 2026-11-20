@@ -10,7 +10,12 @@ describe("Registrierung geschlossen (SIGNUP_MODE=closed)", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/auth/signup",
-      payload: { email: "neu@test.local", password: "ein-gutes-passwort", accountName: "X" },
+      payload: {
+        email: "neu@test.local",
+        password: "ein-gutes-passwort",
+        accountName: "X",
+        acceptTerms: true,
+      },
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().error).toBe("signup_closed");

@@ -16,7 +16,7 @@ async function signup(email = "neu@test.local", accountName = "Startup Haus") {
   return (await t.app()).inject({
     method: "POST",
     url: "/api/auth/signup",
-    payload: { email, password: PASSWORD, accountName },
+    payload: { email, password: PASSWORD, accountName, acceptTerms: true },
     remoteAddress: address(),
   });
 }
@@ -119,7 +119,12 @@ describe("Registrierung", () => {
       remoteAddress: address(),
     });
     expect(res.statusCode).toBe(400);
-    expect(Object.keys(res.json().issues).sort()).toEqual(["accountName", "email", "password"]);
+    expect(Object.keys(res.json().issues).sort()).toEqual([
+      "acceptTerms",
+      "accountName",
+      "email",
+      "password",
+    ]);
     expect(await t.db.$count(account)).toBe(0);
   });
 
@@ -150,7 +155,7 @@ describe("Registrierung", () => {
       const res = await app.inject({
         method: "POST",
         url: "/api/auth/signup",
-        payload: { email: `p${i}@test.local`, password: PASSWORD, accountName: "X" },
+        payload: { email: `p${i}@test.local`, password: PASSWORD, accountName: "X", acceptTerms: true },
         remoteAddress: "10.96.0.1",
       });
       codes.push(res.statusCode);

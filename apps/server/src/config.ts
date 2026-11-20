@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { LegalInfo } from "@comatch/shared";
+import { TERMS_DRAFT, TERMS_VERSION, type LegalInfo } from "@comatch/shared";
 import type { S3Options } from "./storage/s3.ts";
 
 /** Leere Werte (z. B. `LEGAL_PHONE=` aus Docker Compose) gelten als nicht gesetzt. */
@@ -99,6 +99,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       message: "Mit SMTP_URL ist auch MAIL_FROM nötig.",
       path: ["MAIL_FROM"],
     })
+    .refine(
+      (c) => !(c.NODE_ENV === "production" && c.SIGNUP_MODE === "open" && TERMS_VERSION === TERMS_DRAFT),
+      {
+        message:
+          "SIGNUP_MODE=open geht im Produktivbetrieb erst, wenn Nutzungsbedingungen und AV-Vertrag " +
+          "hinterlegt sind (TERMS_VERSION in packages/shared/src/account.ts).",
+        path: ["SIGNUP_MODE"],
+      },
+    )
     .safeParse(env);
   if (!result.success) {
     throw new Error(`Ungültige Umgebungsvariablen:\n${z.prettifyError(result.error)}`);

@@ -18,6 +18,11 @@ const ImprintPage = lazy(() =>
 const PrivacyPage = lazy(() =>
   import("./pages/legal/LegalPages.tsx").then((m) => ({ default: m.PrivacyPage })),
 );
+const EventPrivacyPage = lazy(() =>
+  import("./pages/legal/LegalPages.tsx").then((m) => ({ default: m.EventPrivacyPage })),
+);
+const TermsPage = lazy(() => import("./pages/legal/TermsPages.tsx").then((m) => ({ default: m.TermsPage })));
+const DpaPage = lazy(() => import("./pages/legal/TermsPages.tsx").then((m) => ({ default: m.DpaPage })));
 const InviteApp = lazy(() => import("./pages/admin/AdminApp.tsx").then((m) => ({ default: m.InviteApp })));
 
 createRoot(document.getElementById("root")!).render(
@@ -31,6 +36,10 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/invite/:token" element={<InviteApp />} />
           <Route path="/present/:eventId" element={<PresentPage />} />
           <Route path="/e/:slug" element={<JoinPage />} />
+          <Route path="/e/:slug/datenschutz" element={<EventPrivacyPage />} />
+          <Route path="/e/:slug/privacy" element={<EventPrivacyPage language="en" />} />
+          <Route path="/nutzungsbedingungen" element={<TermsPage />} />
+          <Route path="/av-vertrag" element={<DpaPage />} />
           <Route path="/impressum" element={<ImprintPage />} />
           <Route path="/datenschutz" element={<PrivacyPage />} />
           <Route path="/imprint" element={<ImprintPage language="en" />} />

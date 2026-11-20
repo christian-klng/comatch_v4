@@ -14,7 +14,10 @@ const DEMO_SLUG = "demo";
 async function seedAdmin(db: Db, email: string, password: string) {
   const existing = await db.query.adminUser.findFirst({ where: eq(adminUser.email, email) });
   if (existing) return existing;
-  const [demoAccount] = await db.insert(account).values({ name: "Demo-Konto" }).returning();
+  const [demoAccount] = await db
+    .insert(account)
+    .values({ name: "Demo-Konto", legalFromOperator: true })
+    .returning();
   const [created] = await db
     .insert(adminUser)
     .values({

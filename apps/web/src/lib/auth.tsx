@@ -1,4 +1,4 @@
-import { createContext, use, useCallback, useEffect, useState, type ReactNode } from "react";
+import { createContext, use, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router";
 import type { AdminMe } from "@comatch/shared";
 import { api } from "./api.ts";
@@ -14,23 +14,33 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [admin, setAdmin] = useState<AdminMe | null | undefined>(undefined);
+  const [admin, setAdminState] = useState<AdminMe | null | undefined>(undefined);
+  // Wer sich anmeldet, bevor die erste Abfrage zurück ist (Bestätigungslink, Einladung, neues
+  // Passwort), darf von deren spätem „nicht angemeldet“ nicht wieder abgemeldet werden.
+  const decided = useRef(false);
+  const setAdmin = useCallback((next: AdminMe | null) => {
+    decided.current = true;
+    setAdminState(next);
+  }, []);
 
   useEffect(() => {
     // Jeder Fehler (401, Netzwerk) führt zur Login-Seite.
     api<AdminMe>("/auth/me")
-      .then(setAdmin)
-      .catch(() => setAdmin(null));
+      .then((me) => !decided.current && setAdminState(me))
+      .catch(() => !decided.current && setAdminState(null));
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    setAdmin(await api<AdminMe>("/auth/login", { method: "POST", body: { email, password } }));
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string) => {
+      setAdmin(await api<AdminMe>("/auth/login", { method: "POST", body: { email, password } }));
+    },
+    [setAdmin],
+  );
 
   const logout = useCallback(async () => {
     await api("/auth/logout", { method: "POST" });
     setAdmin(null);
-  }, []);
+  }, [setAdmin]);
 
   return <AuthContext value={{ admin, login, logout, setAdmin }}>{children}</AuthContext>;
 }

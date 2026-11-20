@@ -8,6 +8,7 @@ import {
 } from "@comatch/shared";
 import type { Db } from "../db/client.ts";
 import { account, answerOption, event, participant, participantAnswer, question } from "../db/schema.ts";
+import { organizerOf } from "../events/organizer.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
 import type { MediaSigner } from "../lib/media.ts";
 import { randomToken, sha256 } from "../lib/tokens.ts";
@@ -52,10 +53,7 @@ async function loadPublicQuestions(db: Db | Tx, eventId: string): Promise<Public
 export async function getPublicEvent(db: Db, slug: string): Promise<PublicEvent> {
   const row = await db.query.event.findFirst({ where: eq(event.slug, slug) });
   if (!row) throw notFound("event_not_found");
-  const owner = await db.query.account.findFirst({
-    where: eq(account.id, row.accountId),
-    columns: { status: true },
-  });
+  const owner = await db.query.account.findFirst({ where: eq(account.id, row.accountId) });
   return {
     slug: row.slug,
     title: row.title,
@@ -63,6 +61,7 @@ export async function getPublicEvent(db: Db, slug: string): Promise<PublicEvent>
     status: row.status,
     // Events gesperrter Konten nehmen niemanden mehr auf.
     joinable: isJoinable(row.status) && owner?.status === "active",
+    organizer: owner ? organizerOf(owner) : null,
     roundDurationS: row.roundDurationS,
     logoUrl: row.logoUpdatedAt ? `/api/events/${row.slug}/logo?v=${row.logoUpdatedAt.getTime()}` : null,
     primaryColor: row.primaryColor,

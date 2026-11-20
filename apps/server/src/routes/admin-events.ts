@@ -14,6 +14,7 @@ import {
 import type { AppContext } from "../context.ts";
 import { account, event, participant } from "../db/schema.ts";
 import { eventStats, listParticipants, matchesCsv, participantsCsv } from "../events/report.ts";
+import { organizerOf } from "../events/organizer.ts";
 import { purgeEvent } from "../events/retention.ts";
 import { createEvent, getEventDetail, listEvents, replaceQuestions } from "../events/service.ts";
 import { HttpError, notFound } from "../lib/errors.ts";
@@ -62,6 +63,21 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
     if (!row) throw notFound("event_not_found");
     request.event = row;
   });
+
+  /**
+   * Vor dem Öffnen: Teilnehmende müssen im Datenschutzhinweis lesen können, wer das Event
+   * veranstaltet. Für Konten des Betreibers gelten notfalls dessen Angaben aus dem Impressum.
+   */
+  const assertOrganizerKnown = async (accountId: string) => {
+    const owner = await db.query.account.findFirst({ where: eq(account.id, accountId) });
+    if (owner && (owner.legalFromOperator || organizerOf(owner))) return;
+    throw new HttpError(
+      409,
+      "organizer_missing",
+      "Bevor ihr das Event öffnet, muss unter „Konto“ stehen, wer es veranstaltet (Name, Anschrift, E-Mail). " +
+        "Die Angaben erscheinen im Datenschutzhinweis für die Teilnehmenden. Eintragen kann sie die*der Inhaber*in.",
+    );
+  };
 
   /** Vor dem Start: Grenze für gleichzeitig laufende Events, je Konto und für die ganze Instanz. */
   const assertLiveCapacity = async (accountId: string, eventId: string) => {
@@ -136,6 +152,7 @@ export const adminEventRoutes: FastifyPluginAsync<AppContext> = async (
     const { status } = statusInput.parse(request.body);
     const row = request.event!;
     if (row.status === status) return detail(id);
+    if (status === "open") await assertOrganizerKnown(request.admin!.accountId);
     if (row.status !== "draft" && row.status !== "open") {
       throw new HttpError(409, "status_change_unsupported", "Dieser Statuswechsel ist noch nicht möglich.");
     }

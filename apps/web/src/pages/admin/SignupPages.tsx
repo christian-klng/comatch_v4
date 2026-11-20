@@ -16,6 +16,7 @@ export function SignupPage() {
   const [accountName, setAccountName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -27,7 +28,7 @@ export function SignupPage() {
     setBusy(true);
     setError(null);
     try {
-      await api("/auth/signup", { method: "POST", body: { accountName, email, password } });
+      await api("/auth/signup", { method: "POST", body: { accountName, email, password, acceptTerms } });
       setSent(true);
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, { message: errorMessage(err) }));
@@ -117,6 +118,27 @@ export function SignupPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
+          <label className="flex items-start gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              required
+              checked={acceptTerms}
+              onChange={(e) => setAcceptTerms(e.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-brand"
+            />
+            <span>
+              Ich stimme den{" "}
+              <a href="/nutzungsbedingungen" target="_blank" rel="noreferrer" className="underline">
+                Nutzungsbedingungen
+              </a>{" "}
+              und dem{" "}
+              <a href="/av-vertrag" target="_blank" rel="noreferrer" className="underline">
+                Vertrag zur Auftragsverarbeitung
+              </a>{" "}
+              zu.
+            </span>
+          </label>
+          {issues.acceptTerms && <p className="text-sm text-rose-600">{issues.acceptTerms}</p>}
           <Button type="submit" busy={busy} className="mt-2">
             Konto anlegen
           </Button>

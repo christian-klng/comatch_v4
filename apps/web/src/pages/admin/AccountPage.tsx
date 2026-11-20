@@ -31,7 +31,7 @@ export function AccountPage() {
     setBusy(true);
     setError(null);
     try {
-      const { id: _id, ...body } = form;
+      const { id: _id, legalFromOperator: _fromOperator, ...body } = form;
       const next = await api<AccountDetail>("/admin/account", { method: "PUT", body });
       setForm(next);
       setSaved(true);
@@ -44,6 +44,9 @@ export function AccountPage() {
     }
   };
 
+  const organizerComplete = Boolean(
+    form?.legalName?.trim() && form.legalAddress?.trim() && form.legalEmail?.trim(),
+  );
   const issues = error?.issues ?? {};
   const generalError = error && Object.keys(issues).length === 0 ? error.message : null;
 
@@ -81,9 +84,20 @@ export function AccountPage() {
             <div>
               <h2 className="font-semibold">Veranstalter</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Wer eure Events veranstaltet und für die Daten der Teilnehmenden verantwortlich ist.
+                Wer eure Events veranstaltet und für die Daten der Teilnehmenden verantwortlich ist. Die
+                Angaben stehen im Datenschutzhinweis, den Teilnehmende beim Beitritt sehen.
               </p>
             </div>
+            {!organizerComplete &&
+              (form.legalFromOperator ? (
+                <Alert tone="info">
+                  Solange hier nichts steht, gelten für eure Events die Angaben aus dem Impressum.
+                </Alert>
+              ) : (
+                <Alert tone="warning">
+                  Bitte alle drei Felder ausfüllen. Vorher lässt sich kein Event öffnen.
+                </Alert>
+              ))}
             <Field label="Name oder Firma" htmlFor="legal-name" error={issues.legalName}>
               <Input
                 id="legal-name"
@@ -126,6 +140,69 @@ export function AccountPage() {
           )}
         </form>
       )}
+      {form && canEdit && <DeleteAccount name={form.name} />}
     </>
+  );
+}
+
+/** Konto endgültig löschen; zur Sicherheit muss der Name eingetippt werden. */
+function DeleteAccount({ name }: { name: string }) {
+  const [open, setOpen] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/admin/account", { method: "DELETE", body: { confirmName } });
+      // Ganz neu laden: Die Sitzung ist weg, und die Startseite soll ohne Umweg über den Login kommen.
+      window.location.assign("/");
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="mt-10 flex flex-col gap-4">
+      <div>
+        <h2 className="font-semibold">Konto löschen</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Löscht das Konto mit allen Events, Fotos, Statistiken, Mitgliedern und Einladungen. Das lässt sich
+          nicht rückgängig machen.
+        </p>
+      </div>
+      {!open ? (
+        <div>
+          <Button variant="danger" onClick={() => setOpen(true)}>
+            Konto löschen …
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          {error && <Alert>{error}</Alert>}
+          <Field label={`Zur Bestätigung den Namen des Kontos eintippen: ${name}`} htmlFor="confirm-name">
+            <Input
+              id="confirm-name"
+              autoFocus
+              autoComplete="off"
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+            />
+          </Field>
+          <div className="flex gap-2">
+            <Button type="submit" variant="danger" busy={busy} disabled={confirmName.trim() !== name}>
+              Endgültig löschen
+            </Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Abbrechen
+            </Button>
+          </div>
+        </form>
+      )}
+    </Card>
   );
 }

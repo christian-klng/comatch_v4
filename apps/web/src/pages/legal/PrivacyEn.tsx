@@ -1,9 +1,9 @@
 // Englische Fassung der Datenschutzerklärung (Übersetzung von PrivacyDe in LegalPages.tsx). Bei
 // Änderungen beide Fassungen anpassen und vor dem Einsatz von der Datenschutzberatung prüfen lassen.
-import type { LegalInfo } from "@comatch/shared";
-import { Operator, Section } from "./parts.tsx";
+import type { LegalInfo, Organizer } from "@comatch/shared";
+import { Operator, OrganizerAddress, Section } from "./parts.tsx";
 
-export function PrivacyEn({ legal }: { legal: LegalInfo }) {
+export function PrivacyEn({ legal, organizer }: { legal: LegalInfo; organizer: Organizer | null }) {
   const hours = legal.retentionHours;
   return (
     <>
@@ -13,8 +13,21 @@ export function PrivacyEn({ legal }: { legal: LegalInfo }) {
       </p>
 
       <Section title="1. Controller">
-        <Operator legal={legal} language="en" />
-        {legal.dpo && <p>Data protection officer: {legal.dpo}</p>}
+        {organizer ? (
+          <>
+            <p>The controller responsible for processing your data is the organizer of this event:</p>
+            <OrganizerAddress organizer={organizer} language="en" />
+            <p>
+              In this policy, “we” means the organizer. The CoMatch app is operated on the organizer’s behalf
+              by {legal.name ?? "the platform operator"} (see section 6).
+            </p>
+          </>
+        ) : (
+          <>
+            <Operator legal={legal} language="en" />
+            {legal.dpo && <p>Data protection officer: {legal.dpo}</p>}
+          </>
+        )}
       </Section>
 
       <Section title="2. What data we process">
@@ -87,6 +100,13 @@ export function PrivacyEn({ legal }: { legal: LegalInfo }) {
       </Section>
 
       <Section title="6. Hosting and recipients">
+        {organizer && (
+          <p>
+            The CoMatch app is operated for us by {legal.name ?? "the platform operator"}
+            {legal.address ? `, ${legal.address.replace(/\n/g, ", ")},` : ""} (data processing under Art. 28
+            GDPR).
+          </p>
+        )}
         <p>
           Our servers and image storage are operated for us by Hetzner Online GmbH in Germany (data processing
           under Art. 28 GDPR). No data is transferred to third countries. We do not share your data with third
@@ -106,6 +126,26 @@ export function PrivacyEn({ legal }: { legal: LegalInfo }) {
           German state where you live or where the event takes place.
         </p>
       </Section>
+
+      {!organizer && (
+        <Section title="8. Organizer accounts">
+          <p>
+            Anyone who runs their own events with CoMatch creates an account. For this we process the email
+            address, the password (as a hash only), the account name, the organizer details entered, the time
+            the terms of use were accepted, and sign-ins (session cookie, technically necessary under Section
+            25(2) no. 2 TDDDG). The legal basis is the performance of the user agreement (Art. 6(1)(b) GDPR).
+          </p>
+          <p>
+            We only send emails to this address that the account requires: confirmation of the address, team
+            invitations and password reset links. Sending is handled by an email provider on our behalf.
+          </p>
+          <p>
+            The data is stored for as long as the account exists. The account owner can delete it at any time
+            under “Konto”; this removes all events, photos, members and invitations. Accounts whose email
+            address was never confirmed are deleted automatically after 7 days.
+          </p>
+        </Section>
+      )}
     </>
   );
 }
